@@ -1,0 +1,332 @@
+generator client {
+  provider = "prisma-client-js"
+  // KALICI ÇÖZÜM: Prisma 6.x stable versiyon - Vercel uyumlu
+  engineType = "binary"
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Page {
+  id        String        @id @default(cuid())
+  slug      String        @unique
+  title     String
+  status    PageStatus    @default(DRAFT)
+  sections  PageSection[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model PageSection {
+  id        String   @id @default(cuid())
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  pageId    String
+  type      String   // e.g., hero, features, rich_text, image_gallery, cta, etc.
+  order     Int      @default(0)
+  data      Json     // flexible content payload for the section
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([order])
+}
+
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  phone     String?
+  role      UserRole @default(CUSTOMER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  orders    Order[]
+  addresses Address[]
+  reviews   Review[]
+
+  @@map("users")
+}
+
+model Address {
+  id          String  @id @default(cuid())
+  userId      String
+  title       String  // Ev, İş vb.
+  firstName   String
+  lastName    String
+  phone       String
+  country     String  @default("Türkiye")
+  city        String
+  district    String
+  fullAddress String
+  isDefault   Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shippingOrders Order[] @relation("ShippingAddress")
+  billingOrders  Order[] @relation("BillingAddress")
+
+  @@map("addresses")
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  image       String?
+  isActive    Boolean  @default(true)
+  isPopular   Boolean  @default(false)
+  parentId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String
+  price       Decimal
+  comparePrice Decimal?
+  images      String[] // JSON array of image URLs
+  isActive    Boolean  @default(true)
+  isFeatured  Boolean  @default(false)
+  stock       Int      @default(0)
+  sku         String?  @unique
+  weight      Float?
+  dimensions  String?  // JSON: {length, width, height}
+  categoryId  String
+  productType ProductType @default(SIMPLE)
+  sortOrder   Int      @default(0) // Sıralama alanı
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  category     Category           @relation(fields: [categoryId], references: [id])
+  variations   ProductVariation[]
+  orderItems   OrderItem[]
+  reviews      Review[]
+
+  // Performance indexes for common queries
+  @@index([isActive, categoryId, sortOrder])
+  @@index([isActive, sortOrder, createdAt])
+  @@index([categoryId, isActive])
+  @@map("products")
+}
+
+model ProductVariation {
+  id        String   @id @default(cuid())
+  productId String
+  sku       String?  @unique
+  price     Decimal
+  stock     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  product      Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attributes   ProductVariationAttribute[]
+  orderItems   OrderItem[]
+
+  @@map("product_variations")
+}
+
+model ProductAttribute {
+  id    String @id @default(cuid())
+  name  String @unique // Renk, Beden, Malzeme vb.
+  type  AttributeType
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  values ProductAttributeValue[]
+
+  @@map("product_attributes")
+}
+
+model ProductAttributeValue {
+  id        String @id @default(cuid())
+  attributeId String
+  value     String // Kırmızı, XL, Pamuk vb.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  attribute ProductAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  variations ProductVariationAttribute[]
+
+  @@unique([attributeId, value])
+  @@map("product_attribute_values")
+}
+
+model ProductVariationAttribute {
+  id        String @id @default(cuid())
+  variationId String
+  attributeValueId String
+  createdAt DateTime @default(now())
+
+  // Relations
+  variation      ProductVariation      @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  attributeValue ProductAttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+
+  @@unique([variationId, attributeValueId])
+  @@map("product_variation_attributes")
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  orderNumber   String        @unique
+  userId        String
+  status        OrderStatus   @default(PENDING)
+  totalAmount   Decimal
+  shippingFee   Decimal       @default(0)
+  taxAmount     Decimal       @default(0)
+  discountAmount Decimal      @default(0)
+  finalAmount   Decimal
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
+  shippingAddressId String
+  billingAddressId String
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  user            User         @relation(fields: [userId], references: [id])
+  shippingAddress Address      @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress  Address      @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  productId   String
+  variationId String?
+  quantity    Int
+  unitPrice   Decimal
+  totalPrice  Decimal
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id])
+  variation ProductVariation? @relation(fields: [variationId], references: [id])
+
+  @@map("order_items")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String
+  amount        Decimal
+  method        PaymentMethod
+  status        PaymentStatus
+  transactionId String?       @unique
+  gatewayResponse String?     // JSON response from payment gateway
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  rating    Int      // 1-5
+  title     String?
+  comment   String?
+  isApproved Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("reviews")
+}
+
+
+// Enums
+enum UserRole {
+  ADMIN
+  CUSTOMER
+}
+
+enum ProductType {
+  SIMPLE
+  VARIABLE
+}
+
+enum AttributeType {
+  SELECT
+  RADIO
+  CHECKBOX
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  BANK_TRANSFER
+  CASH_ON_DELIVERY
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+
+model Settings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  type      String   @default("string") // string, number, boolean, json
+  category  String   @default("general") // general, email, payment, shipping, security
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
