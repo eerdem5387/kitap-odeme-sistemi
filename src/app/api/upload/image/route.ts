@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import sharp from 'sharp'
 import { verifyToken } from '@/lib/auth'
+import { writeFile, mkdir } from 'fs/promises'
+import { join } from 'path'
+import { existsSync } from 'fs'
 
 export async function POST(request: NextRequest) {
     try {
@@ -41,7 +44,7 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        // Dosya boyutunu kontrol et (10MB limit - yüksek boyutluları da kabul edip sıkıştıracağız)
+        // Dosya boyutunu kontrol et (10MB limit)
         if (file.size > 10 * 1024 * 1024) {
             return NextResponse.json(
                 { error: 'Dosya boyutu 10MB\'dan büyük olamaz' },
@@ -56,38 +59,76 @@ export async function POST(request: NextRequest) {
         // sharp ile otomatik yeniden boyutlandırma + sıkıştırma
         // - Maksimum 1200x1200
         // - WebP formatı
-        // - Kalite: %80 (genelde 80–90 KB civarına düşürür)
-        const compressedBuffer = await sharp(inputBuffer)
-            .resize({
-                width: 1200,
-                height: 1200,
-                fit: 'inside',
-                withoutEnlargement: true,
-            })
-            .webp({ quality: 80 })
-            .toBuffer()
+        // - Kalite: %80
+        let compressedBuffer: Buffer
+        try {
+            compressedBuffer = await sharp(inputBuffer)
+                .resize({
+                    width: 1200,
+                    height: 1200,
+                    fit: 'inside',
+                    withoutEnlargement: true,
+                })
+                .webp({ quality: 80 })
+                .toBuffer()
+        } catch (sharpError: any) {
+            console.error('Sharp processing error:', sharpError)
+            // Sharp hatası durumunda orijinal buffer'ı kullan
+            compressedBuffer = inputBuffer
+        }
 
-        // Dosya adını oluştur (her zaman webp uzantılı)
+        // Dosya adını oluştur
         const timestamp = Date.now()
         const fileName = `products/${timestamp}.webp`
 
-        // Vercel Blob'a yükle (sıkıştırılmış buffer'ı gönderiyoruz)
-        const blob = await put(fileName, compressedBuffer, {
-            access: 'public',
-            addRandomSuffix: false,
-            contentType: 'image/webp',
-        })
+        // Önce Vercel Blob'u dene, başarısız olursa local storage'a kaydet
+        let imageUrl: string
+        let finalFileName: string
+
+        try {
+            // Vercel Blob'a yükle
+            const blob = await put(fileName, compressedBuffer, {
+                access: 'public',
+                addRandomSuffix: false,
+                contentType: 'image/webp',
+            })
+            imageUrl = blob.url
+            finalFileName = fileName
+        } catch (blobError: any) {
+            console.error('Vercel Blob error:', blobError)
+            
+            // Fallback: Local storage (public/uploads klasörüne kaydet)
+            const uploadsDir = join(process.cwd(), 'public', 'uploads', 'products')
+            
+            // Klasör yoksa oluştur
+            if (!existsSync(uploadsDir)) {
+                await mkdir(uploadsDir, { recursive: true })
+            }
+
+            // Dosyayı kaydet
+            const filePath = join(uploadsDir, `${timestamp}.webp`)
+            await writeFile(filePath, compressedBuffer)
+
+            // URL oluştur
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+            imageUrl = `${baseUrl}/uploads/products/${timestamp}.webp`
+            finalFileName = `uploads/products/${timestamp}.webp`
+        }
 
         return NextResponse.json({
             success: true,
-            url: blob.url,
-            fileName: fileName
+            url: imageUrl,
+            fileName: finalFileName
         })
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error uploading file:', error)
+        const errorMessage = error?.message || 'Dosya yüklenirken bir hata oluştu'
         return NextResponse.json(
-            { error: 'Dosya yüklenirken bir hata oluştu' },
+            { 
+                error: errorMessage,
+                details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+            },
             { status: 500 }
         )
     }
