@@ -60,7 +60,7 @@ export default function AdminHeader() {
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="px-4 py-3 border-b border-gray-50">
                   <p className="text-sm font-medium text-gray-900">Admin Hesabı</p>
-                  <p className="text-xs text-gray-500 truncate">admin@example.com</p>
+                  <p className="text-xs text-gray-500 truncate">info@leventokullari.com</p>
                 </div>
                 
                 <div className="p-1">

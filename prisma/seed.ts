@@ -7,12 +7,15 @@ async function main() {
     console.log('🌱 Seeding database...')
 
     // Admin kullanıcısı oluştur
-    const adminPassword = await hashPassword('admin123')
+    const adminPassword = await hashPassword('QAZWSX90')
     const admin = await prisma.user.upsert({
-        where: { email: 'admin@example.com' },
-        update: {},
+        where: { email: 'info@leventokullari.com' },
+        update: {
+            password: adminPassword,
+            name: 'Admin User'
+        },
         create: {
-            email: 'admin@example.com',
+            email: 'info@leventokullari.com',
             password: adminPassword,
             name: 'Admin User',
             role: 'ADMIN'
@@ -318,7 +321,7 @@ async function main() {
     })
 
     console.log('✅ Database seeded successfully!')
-    console.log('👤 Admin: admin@example.com / admin123')
+    console.log('👤 Admin: info@leventokullari.com / QAZWSX90')
     console.log('👤 Customer: customer@test.com / customer123')
 }
 

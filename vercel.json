@@ -1,6 +1,4 @@
 {
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
   "framework": "nextjs",
   "functions": {
     "src/app/api/**/*.ts": {
@@ -10,9 +8,8 @@
   "regions": [
     "iad1"
   ],
-  "env": {
-    "NODE_ENV": "production"
-  },
+  "buildCommand": "prisma generate && next build",
+  "installCommand": "npm install",
   "build": {
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1"

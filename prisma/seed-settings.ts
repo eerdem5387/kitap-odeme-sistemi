@@ -6,7 +6,7 @@ const defaultSettings = [
     // Genel ayarlar
     { key: 'general.siteName', value: 'E-Ticaret Sitesi', type: 'string', category: 'general' },
     { key: 'general.siteDescription', value: 'Modern ve güvenilir e-ticaret deneyimi', type: 'string', category: 'general' },
-    { key: 'general.contactEmail', value: 'info@example.com', type: 'string', category: 'general' },
+    { key: 'general.contactEmail', value: 'info@leventokullari.com', type: 'string', category: 'general' },
     { key: 'general.contactPhone', value: '+90 XXX XXX XX XX', type: 'string', category: 'general' },
     { key: 'general.address', value: 'İstanbul, Türkiye', type: 'string', category: 'general' },
 
