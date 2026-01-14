@@ -31,6 +31,7 @@ interface ProductDetailClientProps {
         attributeValue: {
           attributeId: string
           value: string
+          price?: number | null
           attribute?: {
             id: string
             name: string
@@ -102,7 +103,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     const attributesMap: Record<string, {
       id: string
       name: string
-      values: string[]
+      values: Array<{ value: string; price?: number | null }>
     }> = {}
 
     product.variations?.forEach((variation) => {
@@ -110,6 +111,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
         const attributeId = attr.attributeValue.attributeId
         const attributeName = attr.attributeValue.attribute?.name || 'Özellik'
         const value = attr.attributeValue.value
+        const price = attr.attributeValue.price
 
         if (!attributesMap[attributeId]) {
           attributesMap[attributeId] = {
@@ -119,14 +121,33 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
           }
         }
 
-        if (!attributesMap[attributeId].values.includes(value)) {
-          attributesMap[attributeId].values.push(value)
+        // Aynı değer yoksa ekle
+        if (!attributesMap[attributeId].values.find(v => v.value === value)) {
+          attributesMap[attributeId].values.push({ value, price })
         }
       })
     })
 
     // Object.values ile array'e çevir
     return Object.values(attributesMap)
+  }
+
+  // Seçili attribute değerlerinin fiyatlarını topla
+  const calculateAttributePricesTotal = () => {
+    let total = 0
+    const availableAttributes = getAvailableAttributes()
+    
+    availableAttributes.forEach(attr => {
+      const selectedValue = selectedAttributes[attr.id]
+      if (selectedValue) {
+        const valueData = attr.values.find(v => v.value === selectedValue)
+        if (valueData?.price) {
+          total += Number(valueData.price)
+        }
+      }
+    })
+    
+    return total
   }
 
   const handleAttributeChange = (attributeId: string, value: string) => {
@@ -172,7 +193,9 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     }
   }, [])
 
-  const effectivePrice = selectedVariation ? selectedVariation.price : product.price
+  const attributePricesTotal = calculateAttributePricesTotal()
+  const basePrice = selectedVariation ? selectedVariation.price : product.price
+  const effectivePrice = basePrice + attributePricesTotal
   const effectiveStock = selectedVariation?.stock ?? product.stock
 
   return (
@@ -231,7 +254,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <span className="text-3xl font-bold text-gray-900">
-                  ₺{Number(effectivePrice).toLocaleString('tr-TR')}
+                  ₺{Number(effectivePrice).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 {product.productType === 'SIMPLE' &&
                   product.comparePrice &&
@@ -241,6 +264,15 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                     </span>
                   )}
               </div>
+              {attributePricesTotal > 0 && (
+                <div className="text-sm text-gray-600 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span>Ana fiyat: ₺{Number(basePrice).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span>+</span>
+                    <span>Seçili özellikler: ₺{Number(attributePricesTotal).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center space-x-2">
                 {effectiveStock === -1 && (
@@ -309,18 +341,23 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
 
                           {openDropdowns[attribute.id] && (
                             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                              {attribute.values.map((value) => (
+                              {attribute.values.map((valueData) => (
                                 <button
-                                  key={`${attribute.id}-${value}`}
+                                  key={`${attribute.id}-${valueData.value}`}
                                   onClick={() => {
-                                    handleAttributeChange(attribute.id, value)
+                                    handleAttributeChange(attribute.id, valueData.value)
                                     toggleDropdown(attribute.id)
                                   }}
-                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none ${
-                                    selectedAttributes[attribute.id] === value ? 'bg-blue-50 font-medium' : ''
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none flex items-center justify-between ${
+                                    selectedAttributes[attribute.id] === valueData.value ? 'bg-blue-50 font-medium' : ''
                                   }`}
                                 >
-                                  {value}
+                                  <span>{valueData.value}</span>
+                                  {valueData.price && (
+                                    <span className="text-xs text-gray-600 ml-2">
+                                      +₺{Number(valueData.price).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  )}
                                 </button>
                               ))}
                             </div>

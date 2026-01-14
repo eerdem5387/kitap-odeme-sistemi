@@ -168,6 +168,7 @@ model ProductAttributeValue {
   id        String @id @default(cuid())
   attributeId String
   value     String // Kırmızı, XL, Pamuk vb.
+  price     Decimal? // Değer bazlı fiyat (opsiyonel)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

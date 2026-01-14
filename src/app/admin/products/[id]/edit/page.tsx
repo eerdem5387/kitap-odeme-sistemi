@@ -972,23 +972,138 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                               Değerleri Seçin (Birden fazla seçebilirsiniz)
                             </label>
+                            
+                            {/* Yeni Değer Ekleme */}
+                            <div className="mb-3 flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="Yeni değer ekle..."
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                id={`new-value-input-${selectedAttr.attributeId}`}
+                              />
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="Fiyat (₺)"
+                                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                id={`new-price-input-${selectedAttr.attributeId}`}
+                              />
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  const valueInput = document.getElementById(`new-value-input-${selectedAttr.attributeId}`) as HTMLInputElement
+                                  const priceInput = document.getElementById(`new-price-input-${selectedAttr.attributeId}`) as HTMLInputElement
+                                  const newValue = valueInput.value.trim()
+                                  const newPrice = priceInput.value.trim()
+                                  
+                                  if (newValue) {
+                                    try {
+                                      const token = localStorage.getItem('token')
+                                      const response = await fetch(`/api/attributes/${selectedAttr.attributeId}/values`, {
+                                        method: 'POST',
+                                        headers: {
+                                          'Content-Type': 'application/json',
+                                          'Authorization': `Bearer ${token}`
+                                        },
+                                        body: JSON.stringify({ 
+                                          value: newValue,
+                                          price: newPrice || null
+                                        })
+                                      })
+                                      
+                                      if (response.ok) {
+                                        const newAttributeValue = await response.json()
+                                        // Yeni değeri seçili değerlere ekle
+                                        updateSelectedAttributeValues(
+                                          selectedAttr.attributeId,
+                                          [...selectedAttr.selectedValues, newAttributeValue.id]
+                                        )
+                                        // Attribute listesini yenile
+                                        const attributesRes = await fetch('/api/attributes', {
+                                          headers: {
+                                            'Authorization': `Bearer ${token}`
+                                          }
+                                        })
+                                        if (attributesRes.ok) {
+                                          const updatedAttributes = await attributesRes.json()
+                                          setAvailableAttributes(updatedAttributes)
+                                        }
+                                        valueInput.value = ''
+                                        priceInput.value = ''
+                                        showNotification('success', `"${newValue}" değeri eklendi ve seçildi`)
+                                      } else {
+                                        const error = await response.json()
+                                        showNotification('error', error.error || 'Değer eklenirken bir hata oluştu')
+                                      }
+                                    } catch (error) {
+                                      console.error('Error adding value:', error)
+                                      showNotification('error', 'Değer eklenirken bir hata oluştu')
+                                    }
+                                  }
+                                }}
+                                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                              >
+                                + Ekle
+                              </button>
+                            </div>
+                            
                             <div className="space-y-2">
                               {attributeData?.values.map((value) => (
-                                <label key={value.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                                <div key={value.id} className="flex items-center space-x-2 hover:bg-gray-100 p-2 rounded">
+                                  <label className="flex items-center space-x-2 cursor-pointer flex-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedAttr.selectedValues.includes(value.id)}
+                                      onChange={(e) => {
+                                        const currentValues = selectedAttr.selectedValues
+                                        const newValues = e.target.checked
+                                          ? [...currentValues, value.id]
+                                          : currentValues.filter(id => id !== value.id)
+                                        updateSelectedAttributeValues(selectedAttr.attributeId, newValues)
+                                      }}
+                                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <span className="text-sm text-gray-700">{value.value}</span>
+                                  </label>
                                   <input
-                                    type="checkbox"
-                                    checked={selectedAttr.selectedValues.includes(value.id)}
-                                    onChange={(e) => {
-                                      const currentValues = selectedAttr.selectedValues
-                                      const newValues = e.target.checked
-                                        ? [...currentValues, value.id]
-                                        : currentValues.filter(id => id !== value.id)
-                                      updateSelectedAttributeValues(selectedAttr.attributeId, newValues)
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="Fiyat (₺)"
+                                    value={value.price ? value.price.toString() : ''}
+                                    onChange={async (e) => {
+                                      const newPrice = e.target.value.trim()
+                                      try {
+                                        const token = localStorage.getItem('token')
+                                        const response = await fetch(`/api/attributes/${selectedAttr.attributeId}/values/${value.id}`, {
+                                          method: 'PUT',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token}`
+                                          },
+                                          body: JSON.stringify({ price: newPrice || null })
+                                        })
+                                        
+                                        if (response.ok) {
+                                          // Attribute listesini yenile
+                                          const attributesRes = await fetch('/api/attributes', {
+                                            headers: {
+                                              'Authorization': `Bearer ${token}`
+                                            }
+                                          })
+                                          if (attributesRes.ok) {
+                                            const updatedAttributes = await attributesRes.json()
+                                            setAvailableAttributes(updatedAttributes)
+                                          }
+                                        }
+                                      } catch (error) {
+                                        console.error('Error updating price:', error)
+                                      }
                                     }}
-                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    className="w-28 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                                   />
-                                  <span className="text-sm text-gray-700">{value.value}</span>
-                                </label>
+                                </div>
                               ))}
                             </div>
                             {selectedAttr.selectedValues.length === 0 && (

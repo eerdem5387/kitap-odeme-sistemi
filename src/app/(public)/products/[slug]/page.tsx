@@ -71,6 +71,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                     id: true,
                     attributeId: true,
                     value: true,
+                    price: true,
                     attribute: {
                       select: {
                         id: true,
