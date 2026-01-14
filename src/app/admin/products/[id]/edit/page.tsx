@@ -124,23 +124,18 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     fetchData()
   }, [])
 
-  // Ürün verilerini yükle
+  // Ürün verilerini yükle (availableAttributes yüklendikten sonra)
   useEffect(() => {
     const fetchProduct = async () => {
+      // availableAttributes henüz yüklenmediyse bekle
+      if (availableAttributes.length === 0) {
+        return
+      }
+
       try {
         const response = await fetch(`/api/products/${productId}`)
         if (response.ok) {
           const product: Product = await response.json()
-          
-          // Debug için veri yapısını logla
-          console.log('Product data:', product)
-          if (product.variations) {
-            console.log('Variations data:', product.variations)
-            console.log('First variation details:', JSON.stringify(product.variations[0], null, 2))
-            if (product.variations[0] && product.variations[0].attributes) {
-              console.log('First variation attributes:', product.variations[0].attributes)
-            }
-          }
           
           setFormData({
             name: product.name,
@@ -160,9 +155,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           setIsUnlimitedStock(product.stock === -1)
 
           // Varyasyonlu ürünse varyasyonları yükle
-          if (product.productType === 'VARIABLE' && product.variations) {
-            console.log('Varyasyonlu ürün tespit edildi, varyasyonlar yükleniyor...')
-            
+          if (product.productType === 'VARIABLE' && product.variations && product.variations.length > 0) {
             // Varyasyonlardan attribute'ları çıkar ve ID'lerine göre grupla
             const attributeMap = new Map<string, {
               attributeId: string
@@ -174,6 +167,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               if (variation.attributes && Array.isArray(variation.attributes)) {
                 variation.attributes.forEach(attr => {
                   if (attr && attr.attributeValue && attr.attributeValue.attribute) {
+                    // attributeId'yi doğru şekilde al
                     const attributeId = attr.attributeValue.attributeId || attr.attributeValue.attribute.id
                     const attributeName = attr.attributeValue.attribute.name
                     const valueId = attr.attributeValue.id
@@ -207,14 +201,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               const selectedAttr = loadedSelectedAttributes[0]
               const quickVars = product.variations.map(variation => {
                 const attr = variation.attributes && Array.isArray(variation.attributes) && variation.attributes.length > 0
-                  ? variation.attributes.find(a => 
-                      a.attributeValue?.attributeId === selectedAttr.attributeId ||
-                      a.attributeValue?.attribute?.id === selectedAttr.attributeId
-                    )
+                  ? variation.attributes.find(a => {
+                      const attrId = a.attributeValue?.attributeId || a.attributeValue?.attribute?.id
+                      return attrId === selectedAttr.attributeId
+                    })
                   : null
                 
                 // Değer adını bul
-                const valueId = attr?.attributeValue?.id
                 const valueName = attr?.attributeValue?.value || ''
                 
                 return {
@@ -248,6 +241,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               }))
               setVariations(loadedVariations)
             }
+          } else if (product.productType === 'VARIABLE') {
+            // Varyasyonlu ürün ama henüz varyasyon yok
+            setSelectedAttributes([])
+            setVariations([])
+            setQuickVariations([])
+            setIsQuickMode(false)
           }
         } else {
           showNotification('error', 'Ürün yüklenirken bir hata oluştu')
@@ -260,10 +259,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       }
     }
 
-    if (productId) {
+    if (productId && availableAttributes.length > 0) {
       fetchProduct()
     }
-  }, [productId])
+  }, [productId, availableAttributes])
 
   // Toast notification gösterme fonksiyonu
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -293,30 +292,78 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   // Seçili attribute'u kaldırma
   const removeSelectedAttribute = (attributeId: string) => {
     setSelectedAttributes(selectedAttributes.filter(sa => sa.attributeId !== attributeId))
-    generateVariations()
+    // Mevcut varyasyonları koru, sadece bu attribute'a ait varyasyonları kaldır
+    if (isQuickMode) {
+      // Hızlı modda: Bu attribute'a ait varyasyonları kaldır
+      setQuickVariations([])
+    } else {
+      // Normal modda: Bu attribute'a ait varyasyonları kaldır
+      setVariations(prev => prev.filter(v => 
+        !v.attributes.some(a => a.attributeId === attributeId)
+      ))
+    }
   }
 
   // Attribute değerlerini seçme/güncelleme
   const updateSelectedAttributeValues = (attributeId: string, valueIds: string[]) => {
+    const currentAttr = selectedAttributes.find(sa => sa.attributeId === attributeId)
+    const previousValues = currentAttr?.selectedValues || []
+    
     const updated = selectedAttributes.map(sa => 
       sa.attributeId === attributeId 
         ? { ...sa, selectedValues: valueIds }
         : sa
     )
     setSelectedAttributes(updated)
-    generateVariations()
+    
+    // Sadece yeni değerler eklendiğinde varyasyon oluştur, mevcut varyasyonları koru
+    const newValues = valueIds.filter(id => !previousValues.includes(id))
+    if (newValues.length > 0) {
+      // Yeni değerler eklendi, varyasyon oluştur
+      generateVariations()
+    } else {
+      // Değer kaldırıldı, sadece ilgili varyasyonları temizle
+      if (isQuickMode) {
+        const attributeData = availableAttributes.find(a => a.id === attributeId)
+        const removedValueIds = previousValues.filter(id => !valueIds.includes(id))
+        const removedValueNames = new Set(
+          removedValueIds.map(id => {
+            const value = attributeData?.values.find(v => v.id === id)
+            return value?.value
+          }).filter(Boolean)
+        )
+        // Sadece geçici ID'li varyasyonları kaldır, mevcut varyasyonları koru
+        setQuickVariations(prev => prev.filter(qv => {
+          if (!qv.id.startsWith('quick-')) return true // Mevcut varyasyonları koru
+          return !removedValueNames.has(qv.name.trim())
+        }))
+      } else {
+        // Normal modda: Kaldırılan değerlere ait varyasyonları temizle (sadece geçici olanlar)
+        setVariations(prev => prev.filter(v => {
+          // Mevcut varyasyonları koru
+          if (!v.id.startsWith('var-')) return true
+          // Geçici varyasyonlar için kontrol et
+          return v.attributes.some(a => {
+            if (a.attributeId === attributeId) {
+              return valueIds.includes(a.attributeValueId)
+            }
+            return true
+          })
+        }))
+      }
+    }
   }
 
   // Varyasyonları otomatik oluştur (attribute ID'lerine göre)
+  // NOT: Bu fonksiyon sadece yeni değerler eklendiğinde çağrılmalı, mevcut varyasyonları korumalı
   const generateVariations = () => {
     const validAttributes = selectedAttributes.filter(sa => 
       sa.selectedValues.length > 0
     )
 
     if (validAttributes.length === 0) {
-      setVariations([])
-      setIsQuickMode(false)
-      setQuickVariations([])
+      // Eğer hiç attribute seçili değilse, sadece seçilmeyen varyasyonları temizle
+      // Mevcut varyasyonları koruma - kullanıcı manuel olarak silebilir
       return
     }
 
@@ -326,27 +373,46 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       const attribute = validAttributes[0]
       const attributeData = availableAttributes.find(a => a.id === attribute.attributeId)
       
-      // Mevcut varyasyonları koru, sadece yeni değerler için boş varyasyonlar ekle
-      const existingValueNames = new Set(quickVariations.map(qv => qv.name.trim()))
-      const newValues = attribute.selectedValues
-        .filter(valueId => {
-          const value = attributeData?.values.find(v => v.id === valueId)
-          return value && !existingValueNames.has(value.value)
-        })
-        .map((valueId, index) => {
-          const value = attributeData?.values.find(v => v.id === valueId)
-          return {
-            id: `quick-${Date.now()}-${index}`,
-            name: value?.value || '',
-            price: '',
-            stock: '1',
-            sku: ''
-          }
-        })
+      if (!attributeData) return
       
-      if (newValues.length > 0) {
-        setQuickVariations([...quickVariations, ...newValues])
-      }
+      // Mevcut varyasyonları koru, sadece yeni seçilen değerler için boş varyasyonlar ekle
+      setQuickVariations(prev => {
+        const existingValueNames = new Set(prev.map(qv => qv.name.trim()))
+        const newValues = attribute.selectedValues
+          .filter(valueId => {
+            const value = attributeData.values.find(v => v.id === valueId)
+            return value && !existingValueNames.has(value.value)
+          })
+          .map((valueId, index) => {
+            const value = attributeData.values.find(v => v.id === valueId)
+            return {
+              id: `quick-${Date.now()}-${index}`,
+              name: value?.value || '',
+              price: '',
+              stock: '1',
+              sku: ''
+            }
+          })
+        
+        // Seçilmeyen değerlere ait varyasyonları kaldır (sadece yeni eklenenler)
+        const selectedValueNames = new Set(
+          attribute.selectedValues.map(valueId => {
+            const value = attributeData.values.find(v => v.id === valueId)
+            return value?.value
+          }).filter(Boolean)
+        )
+        
+        // Mevcut varyasyonları koru, sadece geçici ID'li olanları filtrele
+        const kept = prev.filter(qv => {
+          // Eğer ID geçici değilse (veritabanından gelen) koru
+          if (!qv.id.startsWith('quick-')) return true
+          // Geçici ID'li olanlar için kontrol et
+          return selectedValueNames.has(qv.name.trim())
+        })
+        
+        return [...kept, ...newValues]
+      })
+      
       setVariations([])
       return
     }
@@ -355,29 +421,32 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setIsQuickMode(false)
     setQuickVariations([])
 
-    const combinations = generateCombinations(validAttributes)
-    
-    // Mevcut varyasyonları koru, yeni kombinasyonlar için boş varyasyonlar ekle
-    const existingCombinations = new Set(
-      variations.map(v => 
-        v.attributes.map(a => `${a.attributeId}:${a.attributeValueId}`).sort().join('|')
+    setVariations(prev => {
+      const combinations = generateCombinations(validAttributes)
+      
+      // Mevcut varyasyonları koru, yeni kombinasyonlar için boş varyasyonlar ekle
+      const existingCombinations = new Set(
+        prev.map(v => 
+          v.attributes.map(a => `${a.attributeId}:${a.attributeValueId}`).sort().join('|')
+        )
       )
-    )
-    
-    const newVariations = combinations
-      .filter(combo => {
-        const comboKey = combo.map(a => `${a.attributeId}:${a.attributeValueId}`).sort().join('|')
-        return !existingCombinations.has(comboKey)
-      })
-      .map((combination, index) => ({
-        id: `var-${Date.now()}-${index}`,
-        sku: '',
-        price: '',
-        stock: '',
-        attributes: combination
-      }))
+      
+      const newVariations = combinations
+        .filter(combo => {
+          const comboKey = combo.map(a => `${a.attributeId}:${a.attributeValueId}`).sort().join('|')
+          return !existingCombinations.has(comboKey)
+        })
+        .map((combination, index) => ({
+          id: `var-${Date.now()}-${index}`,
+          sku: '',
+          price: '',
+          stock: '',
+          attributes: combination
+        }))
 
-    setVariations([...variations, ...newVariations])
+      // Mevcut varyasyonları koru, sadece yeni olanları ekle
+      return [...prev, ...newVariations]
+    })
   }
 
   // Kombinasyon oluşturma fonksiyonu (attribute ID'lerine göre)
@@ -1071,9 +1140,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                                     step="0.01"
                                     min="0"
                                     placeholder="Fiyat (₺)"
-                                    value={value.price ? value.price.toString() : ''}
-                                    onChange={async (e) => {
+                                    defaultValue={value.price ? value.price.toString() : ''}
+                                    onBlur={async (e) => {
                                       const newPrice = e.target.value.trim()
+                                      const currentPrice = value.price ? value.price.toString() : ''
+                                      
+                                      // Sadece değişiklik varsa güncelle
+                                      if (newPrice === currentPrice) {
+                                        return
+                                      }
+                                      
                                       try {
                                         const token = localStorage.getItem('token')
                                         const response = await fetch(`/api/attributes/${selectedAttr.attributeId}/values/${value.id}`, {

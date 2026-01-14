@@ -896,9 +896,16 @@ export default function NewProductPage() {
                                     step="0.01"
                                     min="0"
                                     placeholder="Fiyat (₺)"
-                                    value={value.price ? value.price.toString() : ''}
-                                    onChange={async (e) => {
+                                    defaultValue={value.price ? value.price.toString() : ''}
+                                    onBlur={async (e) => {
                                       const newPrice = e.target.value.trim()
+                                      const currentPrice = value.price ? value.price.toString() : ''
+                                      
+                                      // Sadece değişiklik varsa güncelle
+                                      if (newPrice === currentPrice) {
+                                        return
+                                      }
+                                      
                                       try {
                                         const token = localStorage.getItem('token')
                                         const response = await fetch(`/api/attributes/${selectedAttr.attributeId}/values/${value.id}`, {
