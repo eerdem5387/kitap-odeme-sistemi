@@ -928,6 +928,57 @@ export default function NewProductPage() {
                                     }}
                                     className="w-28 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                                   />
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (!confirm(`"${value.value}" değerini silmek istediğinize emin misiniz?`)) {
+                                        return
+                                      }
+                                      
+                                      try {
+                                        const token = localStorage.getItem('token')
+                                        const response = await fetch(`/api/attributes/${selectedAttr.attributeId}/values/${value.id}`, {
+                                          method: 'DELETE',
+                                          headers: {
+                                            'Authorization': `Bearer ${token}`
+                                          }
+                                        })
+                                        
+                                        if (response.ok) {
+                                          // Seçili değerlerden kaldır
+                                          updateSelectedAttributeValues(
+                                            selectedAttr.attributeId,
+                                            selectedAttr.selectedValues.filter(id => id !== value.id)
+                                          )
+                                          
+                                          // Attribute listesini yenile
+                                          const attributesRes = await fetch('/api/attributes', {
+                                            headers: {
+                                              'Authorization': `Bearer ${token}`
+                                            }
+                                          })
+                                          if (attributesRes.ok) {
+                                            const updatedAttributes = await attributesRes.json()
+                                            setAvailableAttributes(updatedAttributes)
+                                          }
+                                          
+                                          showNotification('success', `"${value.value}" değeri silindi`)
+                                        } else {
+                                          const error = await response.json()
+                                          showNotification('error', error.error || 'Değer silinirken bir hata oluştu')
+                                        }
+                                      } catch (error) {
+                                        console.error('Error deleting value:', error)
+                                        showNotification('error', 'Değer silinirken bir hata oluştu')
+                                      }
+                                    }}
+                                    className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1.5 rounded transition-colors"
+                                    title="Değeri Sil"
+                                  >
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
                                 </div>
                               ))}
                             </div>
