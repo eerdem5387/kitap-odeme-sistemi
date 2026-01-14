@@ -70,7 +70,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
                   select: {
                     id: true,
                     attributeId: true,
-                    value: true
+                    value: true,
+                    attribute: {
+                      select: {
+                        id: true,
+                        name: true
+                      }
+                    }
                   }
                 }
               }

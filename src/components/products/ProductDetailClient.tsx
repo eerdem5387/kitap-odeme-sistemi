@@ -31,6 +31,10 @@ interface ProductDetailClientProps {
         attributeValue: {
           attributeId: string
           value: string
+          attribute?: {
+            id: string
+            name: string
+          }
         }
       }>
     }>
@@ -93,46 +97,58 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     }
   }
 
-  const getAttributeDisplayName = (attributeId: string) => {
-    const map: Record<string, string> = {
-      cmdpvbew6000qlaulvoazkpgu: 'Öğrenci',
-      renk: 'Renk',
-      beden: 'Beden',
-      boyut: 'Boyut',
-      model: 'Model',
-      tip: 'Tip',
-      kategori: 'Kategori'
-    }
-    return map[attributeId] || 'Özellik'
-  }
-
+  // Attribute'ları attribute ID'ye göre grupla (her attribute için ayrı seçim)
   const getAvailableAttributes = () => {
-    const attributes: Record<string, string[]> = {}
+    const attributesMap: Record<string, {
+      id: string
+      name: string
+      values: string[]
+    }> = {}
 
     product.variations?.forEach((variation) => {
       variation.attributes.forEach((attr) => {
-        const name = getAttributeDisplayName(attr.attributeValue.attributeId)
+        const attributeId = attr.attributeValue.attributeId
+        const attributeName = attr.attributeValue.attribute?.name || 'Özellik'
         const value = attr.attributeValue.value
-        if (!attributes[name]) attributes[name] = []
-        if (!attributes[name].includes(value)) attributes[name].push(value)
+
+        if (!attributesMap[attributeId]) {
+          attributesMap[attributeId] = {
+            id: attributeId,
+            name: attributeName,
+            values: []
+          }
+        }
+
+        if (!attributesMap[attributeId].values.includes(value)) {
+          attributesMap[attributeId].values.push(value)
+        }
       })
     })
 
-    return attributes
+    // Object.values ile array'e çevir
+    return Object.values(attributesMap)
   }
 
-  const handleAttributeChange = (attributeName: string, value: string) => {
-    const next = { ...selectedAttributes, [attributeName]: value }
+  const handleAttributeChange = (attributeId: string, value: string) => {
+    const next = { ...selectedAttributes, [attributeId]: value }
     setSelectedAttributes(next)
 
-    const match = product.variations?.find((variation) =>
-      variation.attributes.every((attr) => {
-        const name = getAttributeDisplayName(attr.attributeValue.attributeId)
-        return next[name] === attr.attributeValue.value
-      })
-    )
+    // Tüm attribute'lar seçildiğinde varyasyonu bul
+    const availableAttributes = getAvailableAttributes()
+    const allSelected = availableAttributes.every(attr => next[attr.id])
 
-    setSelectedVariation(match || null)
+    if (allSelected) {
+      const match = product.variations?.find((variation) =>
+        variation.attributes.every((attr) => {
+          return next[attr.attributeValue.attributeId] === attr.attributeValue.value
+        })
+      )
+      setSelectedVariation(match || null)
+    } else {
+      // Tüm attribute'lar seçilmediyse varyasyonu temizle
+      setSelectedVariation(null)
+    }
+    
     setQuantity(1)
   }
 
@@ -263,86 +279,91 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
           <div className="space-y-4">
             {product.productType === 'VARIABLE' ? (
               <div className="space-y-4">
-                {/* Öğrenci / varyasyon seçimi */}
+                {/* Varyasyon seçimi - Her attribute için ayrı dropdown */}
                 {product.variations && product.variations.length > 0 && (
                   <div className="space-y-4">
-                    {Object.entries(getAvailableAttributes()).map(([attributeName, values]) => {
-                      const displayName =
-                        attributeName === 'Özellik' || attributeName === 'Öğrenci'
-                          ? 'Öğrenciler'
-                          : attributeName
+                    {getAvailableAttributes().map((attribute) => (
+                      <div key={attribute.id} className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">
+                          {attribute.name}:
+                        </label>
+                        <div className="relative dropdown-container">
+                          <button
+                            type="button"
+                            onClick={() => toggleDropdown(attribute.id)}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                              selectedAttributes[attribute.id]
+                                ? 'border-blue-500 text-gray-900'
+                                : 'border-gray-300 text-gray-500 hover:border-blue-500'
+                            }`}
+                          >
+                            <span>
+                              {selectedAttributes[attribute.id] || `Bir ${attribute.name} seçin`}
+                            </span>
+                            <ChevronDown
+                              className={`h-4 w-4 text-gray-400 transition-transform ${
+                                openDropdowns[attribute.id] ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
 
-                      return (
-                        <div key={attributeName} className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">
-                            {displayName}:
-                          </label>
-                          <div className="relative dropdown-container">
-                            <button
-                              type="button"
-                              onClick={() => toggleDropdown(attributeName)}
-                              className="w-full flex items-center justify-between px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <span
-                                className={
-                                  selectedAttributes[attributeName]
-                                    ? 'text-gray-900'
-                                    : 'text-gray-500'
-                                }
-                              >
-                                {selectedAttributes[attributeName] || 'Seçiniz'}
-                              </span>
-                              <ChevronDown
-                                className={`h-4 w-4 text-gray-400 transition-transform ${
-                                  openDropdowns[attributeName] ? 'rotate-180' : ''
-                                }`}
-                              />
-                            </button>
-
-                            {openDropdowns[attributeName] && (
-                              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                                {values.map((value) => (
-                                  <button
-                                    key={`${attributeName}-${value}`}
-                                    onClick={() => {
-                                      handleAttributeChange(attributeName, value)
-                                      toggleDropdown(attributeName)
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
-                                  >
-                                    {value}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                          {openDropdowns[attribute.id] && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                              {attribute.values.map((value) => (
+                                <button
+                                  key={`${attribute.id}-${value}`}
+                                  onClick={() => {
+                                    handleAttributeChange(attribute.id, value)
+                                    toggleDropdown(attribute.id)
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none ${
+                                    selectedAttributes[attribute.id] === value ? 'bg-blue-50 font-medium' : ''
+                                  }`}
+                                >
+                                  {value}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      )
-                    })}
+                      </div>
+                    ))}
 
                     {selectedVariation && (
-                      <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium text-gray-700">
-                            Seçilen Öğrenci:
+                      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-3">
+                        <div className="space-y-2">
+                          <span className="text-sm font-semibold text-gray-900 block">
+                            Seçilen Varyasyon:
                           </span>
-                          <span className="text-sm text-gray-600">
-                            {selectedVariation.attributes
-                              .map(
-                                (attr: any) =>
-                                  `${getAttributeDisplayName(
-                                    attr.attributeValue.attributeId
-                                  )}: ${attr.attributeValue.value}`
+                          <div className="space-y-1">
+                            {selectedVariation.attributes.map((attr: any) => {
+                              const attributeName = attr.attributeValue.attribute?.name || 'Özellik'
+                              return (
+                                <div key={attr.attributeValue.id} className="flex justify-between text-sm">
+                                  <span className="text-gray-600">{attributeName}:</span>
+                                  <span className="text-gray-900 font-medium">{attr.attributeValue.value}</span>
+                                </div>
                               )
-                              .join(', ')}
-                          </span>
+                            })}
+                          </div>
                         </div>
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center pt-2 border-t border-blue-200">
                           <span className="text-sm font-medium text-gray-700">Fiyat:</span>
-                          <span className="text-lg font-bold text-gray-900">
+                          <span className="text-lg font-bold text-blue-600">
                             ₺{Number(selectedVariation.price).toLocaleString('tr-TR')}
                           </span>
                         </div>
+                        {selectedVariation.stock !== undefined && (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-gray-600">Stok:</span>
+                            <span className={`font-medium ${
+                              selectedVariation.stock > 10 ? 'text-green-600' : 
+                              selectedVariation.stock > 0 ? 'text-orange-600' : 'text-red-600'
+                            }`}>
+                              {selectedVariation.stock === -1 ? 'Sınırsız' : `${selectedVariation.stock} adet`}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -382,8 +403,18 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                     </div>
 
                     {!selectedVariation && (
-                      <div className="text-sm text-gray-600 bg-yellow-50 p-3 rounded-lg">
-                        Lütfen öğrenciyi seçin
+                      <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                        {(() => {
+                          const availableAttributes = getAvailableAttributes()
+                          const selectedCount = availableAttributes.filter(attr => selectedAttributes[attr.id]).length
+                          const totalCount = availableAttributes.length
+                          
+                          if (selectedCount === 0) {
+                            return `Lütfen ${totalCount > 1 ? 'tüm özellikleri' : 'özelliği'} seçin`
+                          } else {
+                            return `Lütfen kalan ${totalCount - selectedCount} özelliği seçin`
+                          }
+                        })()}
                       </div>
                     )}
                   </div>

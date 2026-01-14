@@ -217,42 +217,50 @@ export async function PUT(
                     // Varyasyon özelliklerini ekle
                     if (variationData.attributes && Array.isArray(variationData.attributes)) {
                         for (const attr of variationData.attributes) {
-                            // Önce özellik değerini bul veya oluştur
-                            let attributeValue = await prisma.productAttributeValue.findFirst({
-                                where: {
-                                    attribute: { name: attr.name },
-                                    value: attr.value
-                                }
-                            })
-
-                            if (!attributeValue) {
-                                // Önce özelliği bul veya oluştur
-                                let attribute = await prisma.productAttribute.findUnique({
-                                    where: { name: attr.name }
-                                })
-
-                                if (!attribute) {
-                                    attribute = await prisma.productAttribute.create({
-                                        data: { name: attr.name, type: 'SELECT' }
-                                    })
-                                }
-
-                                // Özellik değerini oluştur
-                                attributeValue = await prisma.productAttributeValue.create({
+                            // Yeni format: attributeId ve attributeValueId kullanılıyor
+                            if (attr.attributeId && attr.attributeValueId) {
+                                // Doğrudan ID'lerle bağla
+                                await prisma.productVariationAttribute.create({
                                     data: {
-                                        attributeId: attribute.id,
+                                        variationId: newVariation.id,
+                                        attributeValueId: attr.attributeValueId
+                                    }
+                                })
+                            } else if (attr.name && attr.value) {
+                                // Eski format desteği (backward compatibility)
+                                let attributeValue = await prisma.productAttributeValue.findFirst({
+                                    where: {
+                                        attribute: { name: attr.name },
                                         value: attr.value
                                     }
                                 })
-                            }
 
-                            // Varyasyon özelliğini bağla
-                            await prisma.productVariationAttribute.create({
-                                data: {
-                                    variationId: newVariation.id,
-                                    attributeValueId: attributeValue.id
+                                if (!attributeValue) {
+                                    let attribute = await prisma.productAttribute.findUnique({
+                                        where: { name: attr.name }
+                                    })
+
+                                    if (!attribute) {
+                                        attribute = await prisma.productAttribute.create({
+                                            data: { name: attr.name, type: 'SELECT' }
+                                        })
+                                    }
+
+                                    attributeValue = await prisma.productAttributeValue.create({
+                                        data: {
+                                            attributeId: attribute.id,
+                                            value: attr.value
+                                        }
+                                    })
                                 }
-                            })
+
+                                await prisma.productVariationAttribute.create({
+                                    data: {
+                                        variationId: newVariation.id,
+                                        attributeValueId: attributeValue.id
+                                    }
+                                })
+                            }
                         }
                     }
                 } else {
@@ -276,42 +284,50 @@ export async function PUT(
                     // Yeni özellikleri ekle
                     if (variationData.attributes && Array.isArray(variationData.attributes)) {
                         for (const attr of variationData.attributes) {
-                            // Önce özellik değerini bul veya oluştur
-                            let attributeValue = await prisma.productAttributeValue.findFirst({
-                                where: {
-                                    attribute: { name: attr.name },
-                                    value: attr.value
-                                }
-                            })
-
-                            if (!attributeValue) {
-                                // Önce özelliği bul veya oluştur
-                                let attribute = await prisma.productAttribute.findUnique({
-                                    where: { name: attr.name }
-                                })
-
-                                if (!attribute) {
-                                    attribute = await prisma.productAttribute.create({
-                                        data: { name: attr.name, type: 'SELECT' }
-                                    })
-                                }
-
-                                // Özellik değerini oluştur
-                                attributeValue = await prisma.productAttributeValue.create({
+                            // Yeni format: attributeId ve attributeValueId kullanılıyor
+                            if (attr.attributeId && attr.attributeValueId) {
+                                // Doğrudan ID'lerle bağla
+                                await prisma.productVariationAttribute.create({
                                     data: {
-                                        attributeId: attribute.id,
+                                        variationId: variationData.id,
+                                        attributeValueId: attr.attributeValueId
+                                    }
+                                })
+                            } else if (attr.name && attr.value) {
+                                // Eski format desteği (backward compatibility)
+                                let attributeValue = await prisma.productAttributeValue.findFirst({
+                                    where: {
+                                        attribute: { name: attr.name },
                                         value: attr.value
                                     }
                                 })
-                            }
 
-                            // Varyasyon özelliğini bağla
-                            await prisma.productVariationAttribute.create({
-                                data: {
-                                    variationId: variationData.id,
-                                    attributeValueId: attributeValue.id
+                                if (!attributeValue) {
+                                    let attribute = await prisma.productAttribute.findUnique({
+                                        where: { name: attr.name }
+                                    })
+
+                                    if (!attribute) {
+                                        attribute = await prisma.productAttribute.create({
+                                            data: { name: attr.name, type: 'SELECT' }
+                                        })
+                                    }
+
+                                    attributeValue = await prisma.productAttributeValue.create({
+                                        data: {
+                                            attributeId: attribute.id,
+                                            value: attr.value
+                                        }
+                                    })
                                 }
-                            })
+
+                                await prisma.productVariationAttribute.create({
+                                    data: {
+                                        variationId: variationData.id,
+                                        attributeValueId: attributeValue.id
+                                    }
+                                })
+                            }
                         }
                     }
                 }

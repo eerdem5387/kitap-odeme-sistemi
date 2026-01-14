@@ -22,8 +22,17 @@ const createProductSchema = z.object({
         price: z.string().min(1, 'Fiyat gereklidir'),
         stock: z.string().min(1, 'Stok gereklidir'),
         attributes: z.array(z.object({
-            name: z.string().min(1, 'Özellik adı gereklidir'),
-            value: z.string().min(1, 'Özellik değeri gereklidir')
+            // Yeni format (öncelikli)
+            attributeId: z.string().optional(),
+            attributeValueId: z.string().optional(),
+            // Eski format (backward compatibility)
+            name: z.string().optional(),
+            value: z.string().optional()
+        }).refine((data) => {
+            // Ya yeni format ya da eski format olmalı
+            return (data.attributeId && data.attributeValueId) || (data.name && data.value)
+        }, {
+            message: 'Özellik için attributeId/attributeValueId veya name/value gereklidir'
         }))
     })).optional()
 }).refine((data) => {
@@ -289,42 +298,50 @@ export async function POST(request: NextRequest) {
 
                 // Varyasyon özelliklerini ekle
                 for (const attr of variationData.attributes) {
-                    // Önce özellik değerini bul veya oluştur
-                    let attributeValue = await prisma.productAttributeValue.findFirst({
-                        where: {
-                            attribute: { name: attr.name },
-                            value: attr.value
-                        }
-                    })
-
-                    if (!attributeValue) {
-                        // Önce özelliği bul veya oluştur
-                        let attribute = await prisma.productAttribute.findUnique({
-                            where: { name: attr.name }
-                        })
-
-                        if (!attribute) {
-                            attribute = await prisma.productAttribute.create({
-                                data: { name: attr.name, type: 'SELECT' }
-                            })
-                        }
-
-                        // Özellik değerini oluştur
-                        attributeValue = await prisma.productAttributeValue.create({
+                    // Yeni format: attributeId ve attributeValueId kullanılıyor
+                    if (attr.attributeId && attr.attributeValueId) {
+                        // Doğrudan ID'lerle bağla
+                        await prisma.productVariationAttribute.create({
                             data: {
-                                attributeId: attribute.id,
+                                variationId: variation.id,
+                                attributeValueId: attr.attributeValueId
+                            }
+                        })
+                    } else if (attr.name && attr.value) {
+                        // Eski format desteği (backward compatibility)
+                        let attributeValue = await prisma.productAttributeValue.findFirst({
+                            where: {
+                                attribute: { name: attr.name },
                                 value: attr.value
                             }
                         })
-                    }
 
-                    // Varyasyon özelliğini bağla
-                    await prisma.productVariationAttribute.create({
-                        data: {
-                            variationId: variation.id,
-                            attributeValueId: attributeValue.id
+                        if (!attributeValue) {
+                            let attribute = await prisma.productAttribute.findUnique({
+                                where: { name: attr.name }
+                            })
+
+                            if (!attribute) {
+                                attribute = await prisma.productAttribute.create({
+                                    data: { name: attr.name, type: 'SELECT' }
+                                })
+                            }
+
+                            attributeValue = await prisma.productAttributeValue.create({
+                                data: {
+                                    attributeId: attribute.id,
+                                    value: attr.value
+                                }
+                            })
                         }
-                    })
+
+                        await prisma.productVariationAttribute.create({
+                            data: {
+                                variationId: variation.id,
+                                attributeValueId: attributeValue.id
+                            }
+                        })
+                    }
                 }
             }
         }
