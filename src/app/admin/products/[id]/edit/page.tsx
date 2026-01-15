@@ -56,26 +56,25 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     type: string
     values: Array<{ id: string; value: string }>
   }>>([])
-  const [selectedAttributes, setSelectedAttributes] = useState<Array<{
-    attributeId: string
-    attributeName: string
-    selectedValues: string[] // attributeValue ID'leri
+  // Basit varyasyon sistemi için state'ler
+  const [variationTypes, setVariationTypes] = useState<Array<{
+    id: string
+    attributeId: string | null
+    name: string
+    values: Array<{
+      id: string
+      valueId: string | null
+      value: string
+      price: string
+    }>
   }>>([])
-  const [variations, setVariations] = useState<Array<{
+  const [generatedVariations, setGeneratedVariations] = useState<Array<{
     id: string
     sku: string
     price: string
     stock: string
     attributes: Array<{ attributeId: string; attributeValueId: string }>
-  }>>([])
-  // Hızlı ekleme modu için state'ler
-  const [isQuickMode, setIsQuickMode] = useState(false)
-  const [quickVariations, setQuickVariations] = useState<Array<{
-    id: string
-    name: string
-    price: string
-    stock: string
-    sku: string
+    displayName: string
   }>>([])
   const [formData, setFormData] = useState({
     name: '',
@@ -154,99 +153,87 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           // Sınırsız stok durumunu kontrol et (stock = -1 ise sınırsız)
           setIsUnlimitedStock(product.stock === -1)
 
-          // Varyasyonlu ürünse varyasyonları yükle
+          // Varyasyonlu ürünse varyasyonları yükle - Yeni basit sistem
           if (product.productType === 'VARIABLE' && product.variations && product.variations.length > 0) {
-            // Varyasyonlardan attribute'ları çıkar ve ID'lerine göre grupla
+            // Varyasyonlardan attribute'ları çıkar ve grupla
             const attributeMap = new Map<string, {
               attributeId: string
               attributeName: string
-              valueIds: Set<string>
+              values: Map<string, { valueId: string; value: string; price: number | null }>
             }>()
             
             product.variations.forEach(variation => {
               if (variation.attributes && Array.isArray(variation.attributes)) {
                 variation.attributes.forEach(attr => {
                   if (attr && attr.attributeValue && attr.attributeValue.attribute) {
-                    // attributeId'yi doğru şekilde al
                     const attributeId = attr.attributeValue.attributeId || attr.attributeValue.attribute.id
                     const attributeName = attr.attributeValue.attribute.name
                     const valueId = attr.attributeValue.id
+                    const value = attr.attributeValue.value
+                    const price = attr.attributeValue.price
                     
                     if (!attributeMap.has(attributeId)) {
                       attributeMap.set(attributeId, {
                         attributeId,
                         attributeName,
-                        valueIds: new Set()
+                        values: new Map()
                       })
                     }
-                    if (valueId) {
-                      attributeMap.get(attributeId)!.valueIds.add(valueId)
+                    if (valueId && value) {
+                      attributeMap.get(attributeId)!.values.set(valueId, { valueId, value, price })
                     }
                   }
                 })
               }
             })
 
-            // Seçili attribute'ları state'e ekle
-            const loadedSelectedAttributes = Array.from(attributeMap.values()).map(attr => ({
+            // Varyasyon tiplerini oluştur
+            const loadedVariationTypes = Array.from(attributeMap.values()).map((attr, index) => ({
+              id: `type-${index}`,
               attributeId: attr.attributeId,
-              attributeName: attr.attributeName,
-              selectedValues: Array.from(attr.valueIds)
+              name: attr.attributeName,
+              values: Array.from(attr.values.values()).map((val, valIndex) => ({
+                id: `value-${index}-${valIndex}`,
+                valueId: val.valueId,
+                value: val.value,
+                price: val.price ? val.price.toString() : ''
+              }))
             }))
-            setSelectedAttributes(loadedSelectedAttributes)
+            setVariationTypes(loadedVariationTypes)
 
-            // Tek attribute varsa hızlı mod
-            if (loadedSelectedAttributes.length === 1) {
-              setIsQuickMode(true)
-              const selectedAttr = loadedSelectedAttributes[0]
-              const quickVars = product.variations.map(variation => {
-                const attr = variation.attributes && Array.isArray(variation.attributes) && variation.attributes.length > 0
-                  ? variation.attributes.find(a => {
-                      const attrId = a.attributeValue?.attributeId || a.attributeValue?.attribute?.id
-                      return attrId === selectedAttr.attributeId
-                    })
-                  : null
-                
-                // Değer adını bul
-                const valueName = attr?.attributeValue?.value || ''
-                
-                return {
-                  id: variation.id, // Mevcut varyasyon ID'sini koru
-                  name: valueName,
-                  price: variation.price.toString(),
-                  stock: variation.stock.toString(),
-                  sku: variation.sku || ''
-                }
-              })
-              setQuickVariations(quickVars)
-              setVariations([])
-            } else {
-              // 2+ attribute varsa normal mod
-              setIsQuickMode(false)
-              setQuickVariations([])
-              const loadedVariations = product.variations.map(variation => ({
+            // Varyasyonları yükle
+            const loadedVariations = product.variations.map(variation => {
+              const displayParts: string[] = []
+              const attributes: Array<{ attributeId: string; attributeValueId: string }> = []
+              
+              if (variation.attributes && Array.isArray(variation.attributes)) {
+                variation.attributes.forEach(attr => {
+                  if (attr && attr.attributeValue && attr.attributeValue.attribute) {
+                    const attributeId = attr.attributeValue.attributeId || attr.attributeValue.attribute.id
+                    const attributeName = attr.attributeValue.attribute.name
+                    const valueId = attr.attributeValue.id
+                    const value = attr.attributeValue.value
+                    
+                    displayParts.push(`${attributeName}: ${value}`)
+                    attributes.push({ attributeId, attributeValueId: valueId })
+                  }
+                })
+              }
+              
+              return {
                 id: variation.id,
                 sku: variation.sku || '',
                 price: variation.price.toString(),
                 stock: variation.stock.toString(),
-                attributes: variation.attributes && Array.isArray(variation.attributes) 
-                  ? variation.attributes
-                      .filter(attr => attr && attr.attributeValue)
-                      .map(attr => ({
-                        attributeId: attr.attributeValue.attributeId || attr.attributeValue.attribute?.id || '',
-                        attributeValueId: attr.attributeValue.id || ''
-                      }))
-                      .filter(attr => attr.attributeId && attr.attributeValueId)
-                  : []
-              }))
-              setVariations(loadedVariations)
-            }
+                attributes,
+                displayName: displayParts.join(' | ')
+              }
+            })
+            setGeneratedVariations(loadedVariations)
           } else if (product.productType === 'VARIABLE') {
             // Varyasyonlu ürün ama henüz varyasyon yok
-            setSelectedAttributes([])
-            setVariations([])
-            setQuickVariations([])
-            setIsQuickMode(false)
+            setVariationTypes([])
+            setGeneratedVariations([])
           }
         } else {
           showNotification('error', 'Ürün yüklenirken bir hata oluştu')
