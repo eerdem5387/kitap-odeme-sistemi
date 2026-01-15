@@ -310,6 +310,7 @@ export default function NewProductPage() {
       let finalVariations: any[] = []
       
       if (formData.productType === 'VARIABLE') {
+        // Quick mode: Tek attribute, quickVariations kullan
         if (isQuickMode && quickVariations.length > 0 && selectedAttributes.length === 1) {
           const selectedAttr = selectedAttributes[0]
           const attributeData = availableAttributes.find(a => a.id === selectedAttr.attributeId)
@@ -342,8 +343,9 @@ export default function NewProductPage() {
               }
             })
             .filter(v => v !== null) as any[]
-        } else if (!isQuickMode && variations.length > 0) {
-          // Normal mod - zaten attribute ID'leri var
+        } 
+        // Normal mode: 2+ attribute, variations array'inden al
+        else if (!isQuickMode && variations.length > 0) {
           console.log('Processing normal mode variations')
           finalVariations = variations
             .filter(v => {
@@ -362,6 +364,41 @@ export default function NewProductPage() {
                 attributeValueId: attr.attributeValueId
               }))
             }))
+        }
+        // YENİ: Her attribute için ayrı varyasyon oluştur (attribute value fiyatlarıyla)
+        else if (!isQuickMode && selectedAttributes.length > 1) {
+          console.log('Processing multi-attribute variations (one per attribute)')
+          console.log('Selected attributes:', selectedAttributes)
+          
+          // Her attribute için seçili değerlerden varyasyon oluştur
+          for (const selectedAttr of selectedAttributes) {
+            const attributeData = availableAttributes.find(a => a.id === selectedAttr.attributeId)
+            
+            if (!attributeData || selectedAttr.selectedValues.length === 0) {
+              continue
+            }
+            
+            // Her seçili değer için bir varyasyon oluştur
+            for (const valueId of selectedAttr.selectedValues) {
+              const valueData = attributeData.values.find(v => v.id === valueId)
+              if (!valueData) continue
+              
+              // Attribute value'nun fiyatını kullan (eğer varsa)
+              const variationPrice = valueData.price ? valueData.price.toString() : '0'
+              
+              finalVariations.push({
+                sku: '',
+                price: variationPrice,
+                stock: '1',
+                attributes: [{ 
+                  attributeId: selectedAttr.attributeId, 
+                  attributeValueId: valueId 
+                }]
+              })
+            }
+          }
+          
+          console.log('Created variations from attribute values:', finalVariations)
         }
         
         console.log('Final variations count:', finalVariations.length)

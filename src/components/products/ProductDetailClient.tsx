@@ -48,9 +48,14 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
   const [selectedVariation, setSelectedVariation] = useState<any>(null)
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({})
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({})
+  // Her attribute için ayrı varyasyon seçimi
+  const [selectedVariationsByAttribute, setSelectedVariationsByAttribute] = useState<Record<string, any>>({})
+  // Her attribute için ayrı miktar
+  const [quantitiesByAttribute, setQuantitiesByAttribute] = useState<Record<string, number>>({})
 
   const { toasts, removeToast, success, error } = useToast()
 
+  // Tek bir varyasyon için sepete ekleme (eski sistem - geriye dönük uyumluluk)
   const handleAddToCart = () => {
     if (!isClient) return
 
@@ -66,6 +71,47 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
         },
         quantity,
         selectedVariation || undefined
+      )
+      success(
+        'Sepete ekleme işlemi başarılı!',
+        5000,
+        {
+          label: 'Sepete Git',
+          onClick: () => {
+            window.location.href = '/cart'
+          }
+        }
+      )
+    } catch (err) {
+      console.error('Sepete ekleme hatası:', err)
+      error('Sepete eklenirken bir hata oluştu. Lütfen tekrar deneyin.')
+    }
+  }
+
+  // Belirli bir attribute için varyasyonu sepete ekleme (yeni sistem)
+  const handleAddVariationToCart = (attributeId: string) => {
+    if (!isClient) return
+
+    const variation = selectedVariationsByAttribute[attributeId]
+    if (!variation) {
+      error('Lütfen önce bir varyasyon seçin')
+      return
+    }
+
+    const qty = quantitiesByAttribute[attributeId] || 1
+
+    try {
+      cartService.addItem(
+        {
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          price: variation.price,
+          stock: variation.stock,
+          images: product.images
+        },
+        qty,
+        variation
       )
       success(
         'Sepete ekleme işlemi başarılı!',
@@ -154,7 +200,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     const next = { ...selectedAttributes, [attributeId]: value }
     setSelectedAttributes(next)
 
-    // Tüm attribute'lar seçildiğinde varyasyonu bul
+    // Tüm attribute'lar seçildiğinde varyasyonu bul (eski sistem - geriye dönük uyumluluk)
     const availableAttributes = getAvailableAttributes()
     const allSelected = availableAttributes.every(attr => next[attr.id])
 
@@ -171,6 +217,61 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     }
     
     setQuantity(1)
+
+    // YENİ: Her attribute için ayrı varyasyon bulma
+    // Bu attribute için seçilen değere sahip varyasyonu bul
+    // Öncelikle sadece bu attribute'a sahip varyasyonları bul
+    const singleAttributeVariations = product.variations?.filter((variation) => {
+      // Bu varyasyonun sadece bu attribute'a sahip olması gerekiyor
+      return variation.attributes.length === 1 && 
+             variation.attributes[0].attributeValue.attributeId === attributeId &&
+             variation.attributes[0].attributeValue.value === value
+    }) || []
+
+    if (singleAttributeVariations.length > 0) {
+      // Sadece bu attribute'a sahip varyasyon bulundu
+      setSelectedVariationsByAttribute(prev => ({
+        ...prev,
+        [attributeId]: singleAttributeVariations[0]
+      }))
+
+      // Miktarı başlat
+      if (!quantitiesByAttribute[attributeId]) {
+        setQuantitiesByAttribute(prev => ({
+          ...prev,
+          [attributeId]: 1
+        }))
+      }
+    } else {
+      // Sadece bu attribute'a sahip varyasyon yoksa, bu attribute'ı içeren ilk varyasyonu bul
+      const attributeVariations = product.variations?.filter((variation) => {
+        return variation.attributes.some((attr) => {
+          return attr.attributeValue.attributeId === attributeId && 
+                 attr.attributeValue.value === value
+        })
+      }) || []
+
+      if (attributeVariations.length > 0) {
+        setSelectedVariationsByAttribute(prev => ({
+          ...prev,
+          [attributeId]: attributeVariations[0]
+        }))
+
+        if (!quantitiesByAttribute[attributeId]) {
+          setQuantitiesByAttribute(prev => ({
+            ...prev,
+            [attributeId]: 1
+          }))
+        }
+      } else {
+        // Uygun varyasyon bulunamadıysa temizle
+        setSelectedVariationsByAttribute(prev => {
+          const next = { ...prev }
+          delete next[attributeId]
+          return next
+        })
+      }
+    }
   }
 
   const toggleDropdown = (attributeName: string) => {
@@ -314,57 +415,133 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                 {/* Varyasyon seçimi - Her attribute için ayrı dropdown */}
                 {product.variations && product.variations.length > 0 && (
                   <div className="space-y-4">
-                    {getAvailableAttributes().map((attribute) => (
-                      <div key={attribute.id} className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">
-                          {attribute.name}:
-                        </label>
-                        <div className="relative dropdown-container">
-                          <button
-                            type="button"
-                            onClick={() => toggleDropdown(attribute.id)}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                              selectedAttributes[attribute.id]
-                                ? 'border-blue-500 text-gray-900'
-                                : 'border-gray-300 text-gray-500 hover:border-blue-500'
-                            }`}
-                          >
-                            <span>
-                              {selectedAttributes[attribute.id] || `Bir ${attribute.name} seçin`}
-                            </span>
-                            <ChevronDown
-                              className={`h-4 w-4 text-gray-400 transition-transform ${
-                                openDropdowns[attribute.id] ? 'rotate-180' : ''
-                              }`}
-                            />
-                          </button>
-
-                          {openDropdowns[attribute.id] && (
-                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                              {attribute.values.map((valueData) => (
-                                <button
-                                  key={`${attribute.id}-${valueData.value}`}
-                                  onClick={() => {
-                                    handleAttributeChange(attribute.id, valueData.value)
-                                    toggleDropdown(attribute.id)
-                                  }}
-                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none flex items-center justify-between ${
-                                    selectedAttributes[attribute.id] === valueData.value ? 'bg-blue-50 font-medium' : ''
+                    {getAvailableAttributes().map((attribute) => {
+                      const selectedVariationForAttr = selectedVariationsByAttribute[attribute.id]
+                      const qtyForAttr = quantitiesByAttribute[attribute.id] || 1
+                      
+                      return (
+                        <div key={attribute.id} className="border rounded-lg p-4 bg-gray-50 space-y-3">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">
+                              {attribute.name}:
+                            </label>
+                            <div className="relative dropdown-container">
+                              <button
+                                type="button"
+                                onClick={() => toggleDropdown(attribute.id)}
+                                className={`w-full flex items-center justify-between px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                  selectedAttributes[attribute.id]
+                                    ? 'border-blue-500 text-gray-900'
+                                    : 'border-gray-300 text-gray-500 hover:border-blue-500'
+                                }`}
+                              >
+                                <span>
+                                  {selectedAttributes[attribute.id] || `Bir ${attribute.name} seçin`}
+                                </span>
+                                <ChevronDown
+                                  className={`h-4 w-4 text-gray-400 transition-transform ${
+                                    openDropdowns[attribute.id] ? 'rotate-180' : ''
                                   }`}
+                                />
+                              </button>
+
+                              {openDropdowns[attribute.id] && (
+                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                  {attribute.values.map((valueData) => (
+                                    <button
+                                      key={`${attribute.id}-${valueData.value}`}
+                                      onClick={() => {
+                                        handleAttributeChange(attribute.id, valueData.value)
+                                        toggleDropdown(attribute.id)
+                                      }}
+                                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 focus:bg-gray-100 focus:outline-none flex items-center justify-between ${
+                                        selectedAttributes[attribute.id] === valueData.value ? 'bg-blue-50 font-medium' : ''
+                                      }`}
+                                    >
+                                      <span>{valueData.value}</span>
+                                      {valueData.price && (
+                                        <span className="text-xs text-gray-600 ml-2">
+                                          +₺{Number(valueData.price).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Seçili varyasyon bilgisi ve sepete ekleme */}
+                          {selectedVariationForAttr && (
+                            <div className="bg-white border border-blue-200 rounded-lg p-3 space-y-2">
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-600">Fiyat:</span>
+                                <span className="font-bold text-blue-600">
+                                  ₺{Number(selectedVariationForAttr.price).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-600">Stok:</span>
+                                <span className={`font-medium ${
+                                  selectedVariationForAttr.stock > 10 ? 'text-green-600' : 
+                                  selectedVariationForAttr.stock > 0 ? 'text-orange-600' : 'text-red-600'
+                                }`}>
+                                  {selectedVariationForAttr.stock === -1 ? 'Sınırsız' : `${selectedVariationForAttr.stock} adet`}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center space-x-2 pt-2 border-t border-gray-200">
+                                <div className="flex items-center border border-gray-300 rounded-lg">
+                                  <button
+                                    className="px-2 py-1 text-gray-600 hover:text-gray-900"
+                                    onClick={() => {
+                                      const newQty = Math.max(1, qtyForAttr - 1)
+                                      setQuantitiesByAttribute(prev => ({ ...prev, [attribute.id]: newQty }))
+                                    }}
+                                    disabled={qtyForAttr <= 1}
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={selectedVariationForAttr.stock === -1 ? 999 : selectedVariationForAttr.stock}
+                                    value={qtyForAttr}
+                                    onChange={(e) => {
+                                      const newQty = parseInt(e.target.value || '1', 10)
+                                      const maxStock = selectedVariationForAttr.stock === -1 ? 999 : selectedVariationForAttr.stock
+                                      setQuantitiesByAttribute(prev => ({ 
+                                        ...prev, 
+                                        [attribute.id]: Math.min(Math.max(1, newQty), maxStock)
+                                      }))
+                                    }}
+                                    className="w-12 text-center border-none focus:ring-0 text-sm"
+                                  />
+                                  <button
+                                    className="px-2 py-1 text-gray-600 hover:text-gray-900"
+                                    onClick={() => {
+                                      const maxStock = selectedVariationForAttr.stock === -1 ? 999 : selectedVariationForAttr.stock
+                                      const newQty = Math.min(maxStock, qtyForAttr + 1)
+                                      setQuantitiesByAttribute(prev => ({ ...prev, [attribute.id]: newQty }))
+                                    }}
+                                    disabled={selectedVariationForAttr.stock !== -1 && qtyForAttr >= selectedVariationForAttr.stock}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => handleAddVariationToCart(attribute.id)}
+                                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm flex items-center justify-center"
                                 >
-                                  <span>{valueData.value}</span>
-                                  {valueData.price && (
-                                    <span className="text-xs text-gray-600 ml-2">
-                                      +₺{Number(valueData.price).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </span>
-                                  )}
+                                  <ShoppingCart className="h-4 w-4 mr-2" />
+                                  Sepete Ekle
                                 </button>
-                              ))}
+                              </div>
                             </div>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
 
                     {selectedVariation && (
                       <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-3">
