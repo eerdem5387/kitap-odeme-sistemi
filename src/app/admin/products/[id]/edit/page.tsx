@@ -1237,27 +1237,28 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                               Stok *
                             </label>
                             <div className="space-y-2">
-                              <label className="flex items-center cursor-pointer select-none">
+                              <div className="flex items-center gap-2">
                                 <input
                                   type="checkbox"
+                                  id={`unlimited-stock-${index}`}
                                   checked={variation.isUnlimitedStock || false}
                                   onChange={(e) => {
-                                    e.stopPropagation()
-                                    updateGeneratedVariation(index, 'isUnlimitedStock', e.target.checked)
-                                    if (e.target.checked) {
+                                    const newValue = e.target.checked
+                                    console.log('Checkbox changed:', newValue, 'for variation:', index)
+                                    updateGeneratedVariation(index, 'isUnlimitedStock', newValue)
+                                    if (newValue) {
                                       updateGeneratedVariation(index, 'stock', '')
                                     }
                                   }}
-                                  onClick={(e) => e.stopPropagation()}
                                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto', zIndex: 10 }}
                                 />
-                                <span 
-                                  className="ml-2 text-sm text-gray-700 cursor-pointer"
+                                <label 
+                                  htmlFor={`unlimited-stock-${index}`}
+                                  className="text-sm text-gray-700 cursor-pointer select-none"
                                   onClick={(e) => {
                                     e.preventDefault()
-                                    e.stopPropagation()
                                     const newValue = !variation.isUnlimitedStock
+                                    console.log('Label clicked, toggling to:', newValue)
                                     updateGeneratedVariation(index, 'isUnlimitedStock', newValue)
                                     if (newValue) {
                                       updateGeneratedVariation(index, 'stock', '')
@@ -1265,8 +1266,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                                   }}
                                 >
                                   Sınırsız stok (Stokta gösterilecek)
-                                </span>
-                              </label>
+                                </label>
+                              </div>
                               {!variation.isUnlimitedStock && (
                                 <input
                                   type="number"
