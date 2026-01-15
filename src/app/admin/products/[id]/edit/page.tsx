@@ -674,6 +674,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('=== FORM SUBMIT STARTED ===')
+    console.log('Form data:', formData)
+    console.log('Product ID:', productId)
+    console.log('Is quick mode:', isQuickMode)
+    console.log('Quick variations:', quickVariations)
+    console.log('Variations:', variations)
+    console.log('Selected attributes:', selectedAttributes)
+    
     setIsSaving(true)
 
     try {
@@ -742,6 +750,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       console.log('Variation IDs:', finalVariations.map(v => v.id))
 
       const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token bulunamadı. Lütfen tekrar giriş yapın.')
+      }
+      
+      console.log('Making API call to:', `/api/products/${productId}`)
       const response = await fetch(`/api/products/${productId}`, {
         method: 'PUT',
         headers: {
@@ -751,17 +764,37 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         body: JSON.stringify(productData),
       })
 
+      console.log('API Response status:', response.status)
+      console.log('API Response ok:', response.ok)
+
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen hata' }))
+        console.error('API Error:', errorData)
         throw new Error(errorData.error || 'Ürün güncellenirken bir hata oluştu')
       }
 
+      const responseData = await response.json()
+      console.log('API Success Response:', responseData)
+      console.log('=== FORM SUBMIT SUCCESS ===')
+
       showNotification('success', 'Ürün başarıyla güncellendi')
-      router.push('/admin/products')
+      
+      // Kısa bir gecikme sonrası yönlendir (kullanıcı mesajı görebilsin)
+      setTimeout(() => {
+        router.push('/admin/products')
+      }, 1000)
     } catch (error) {
+      console.error('=== FORM SUBMIT ERROR ===')
       console.error('Error updating product:', error)
+      console.error('Error type:', typeof error)
+      console.error('Error details:', error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : error)
       showNotification('error', error instanceof Error ? error.message : 'Ürün güncellenirken bir hata oluştu')
     } finally {
+      console.log('=== FORM SUBMIT FINALLY ===')
       setIsSaving(false)
     }
   }
@@ -805,7 +838,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
       {/* Form */}
       <div className="bg-white rounded-lg shadow-sm border p-4 sm:p-6">
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+        <form onSubmit={(e) => {
+          console.log('Form onSubmit triggered')
+          handleSubmit(e)
+        }} className="space-y-4 sm:space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {/* Product Name */}
             <div>
