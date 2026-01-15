@@ -199,8 +199,16 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
   }, [])
 
   const attributePricesTotal = calculateAttributePricesTotal()
-  const basePrice = selectedVariation ? selectedVariation.price : product.price
-  const effectivePrice = basePrice + attributePricesTotal
+  // Varyasyonlu ürünlerde: selectedVariation.price zaten final fiyat (admin panelinde girilen fiyat)
+  // Basit ürünlerde: product.price kullan
+  const effectivePrice = product.productType === 'VARIABLE' && selectedVariation 
+    ? selectedVariation.price 
+    : product.price
+  // Varyasyonlu ürünlerde basePrice gösterimi için: varyasyon fiyatı - seçenek fiyatları toplamı
+  // Eğer negatif olursa 0 göster (güvenlik için)
+  const basePrice = product.productType === 'VARIABLE' && selectedVariation
+    ? Math.max(0, selectedVariation.price - attributePricesTotal)
+    : product.price
   const effectiveStock = selectedVariation?.stock ?? product.stock
 
   return (
@@ -269,12 +277,14 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                     </span>
                   )}
               </div>
-              {attributePricesTotal > 0 && (
+              {product.productType === 'VARIABLE' && selectedVariation && attributePricesTotal > 0 && (
                 <div className="text-sm text-gray-600 space-y-1">
                   <div className="flex items-center gap-2">
-                    <span>Ana fiyat: ₺{Number(basePrice).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span>Ana fiyat: ₺{Number(Math.max(0, basePrice)).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     <span>+</span>
                     <span>Seçili seçenekler: ₺{Number(attributePricesTotal).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span>=</span>
+                    <span className="font-semibold text-gray-900">Toplam: ₺{Number(effectivePrice).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               )}
