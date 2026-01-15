@@ -673,6 +673,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('=== handleSubmit FUNCTION CALLED ===')
+    console.log('Event:', e)
     e.preventDefault()
     console.log('=== FORM SUBMIT STARTED ===')
     console.log('Form data:', formData)
@@ -839,9 +841,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       {/* Form */}
       <div className="bg-white rounded-lg shadow-sm border p-4 sm:p-6">
         <form onSubmit={(e) => {
-          console.log('Form onSubmit triggered')
+          console.log('=== FORM onSubmit EVENT TRIGGERED ===')
+          console.log('Event:', e)
+          console.log('Event type:', e.type)
+          console.log('Event target:', e.target)
+          e.preventDefault()
+          console.log('Calling handleSubmit...')
           handleSubmit(e)
-        }} className="space-y-4 sm:space-y-6">
+        }} className="space-y-4 sm:space-y-6" noValidate>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {/* Product Name */}
             <div>

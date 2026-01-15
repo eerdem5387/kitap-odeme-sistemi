@@ -367,13 +367,27 @@ export async function POST(request: NextRequest) {
 
     } catch (error) {
         if (error instanceof z.ZodError) {
+            console.error('=== VALIDATION ERROR ===')
+            console.error('Zod errors:', JSON.stringify(error.issues, null, 2))
+            console.error('Request body:', JSON.stringify(body, null, 2))
             return NextResponse.json(
-                { error: 'Geçersiz veri formatı', details: error.issues },
+                { 
+                    error: 'Geçersiz veri formatı', 
+                    details: error.issues,
+                    message: error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')
+                },
                 { status: 400 }
             )
         }
 
-        console.error('Create product error:', error)
+        console.error('=== CREATE PRODUCT ERROR ===')
+        console.error('Error:', error)
+        console.error('Error type:', typeof error)
+        console.error('Error details:', error instanceof Error ? {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        } : error)
         return NextResponse.json(
             { error: 'Ürün oluşturulurken bir hata oluştu' },
             { status: 500 }

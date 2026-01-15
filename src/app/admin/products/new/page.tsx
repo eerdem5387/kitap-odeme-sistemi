@@ -348,9 +348,14 @@ export default function NewProductPage() {
         variations: formData.productType === 'VARIABLE' ? finalVariations : undefined
       }
 
-      console.log('Sending product data:', productData)
+      console.log('=== SENDING PRODUCT DATA ===')
+      console.log('Product data:', JSON.stringify(productData, null, 2))
 
       const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token bulunamadı. Lütfen tekrar giriş yapın.')
+      }
+
       const response = await fetch('/api/products', {
         method: 'POST',
         headers: {
@@ -360,9 +365,25 @@ export default function NewProductPage() {
         body: JSON.stringify(productData),
       })
 
+      console.log('API Response status:', response.status)
+      console.log('API Response ok:', response.ok)
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Ürün eklenirken bir hata oluştu')
+        const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen hata' }))
+        console.error('=== API ERROR ===')
+        console.error('Error data:', errorData)
+        console.error('Error details:', errorData.details)
+        console.error('Error message:', errorData.message)
+        
+        // Validation hatalarını detaylı göster
+        if (errorData.details && Array.isArray(errorData.details)) {
+          const validationErrors = errorData.details.map((detail: any) => 
+            `${detail.path.join('.')}: ${detail.message}`
+          ).join('\n')
+          throw new Error(`Validation hatası:\n${validationErrors}`)
+        }
+        
+        throw new Error(errorData.message || errorData.error || 'Ürün eklenirken bir hata oluştu')
       }
 
       showNotification('success', 'Ürün başarıyla eklendi')
@@ -374,9 +395,17 @@ export default function NewProductPage() {
       
       router.push('/admin/products')
     } catch (error) {
-      console.error('Error creating product:', error)
+      console.error('=== CREATE PRODUCT ERROR ===')
+      console.error('Error:', error)
+      console.error('Error type:', typeof error)
+      console.error('Error details:', error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : error)
       showNotification('error', error instanceof Error ? error.message : 'Ürün eklenirken bir hata oluştu')
     } finally {
+      console.log('=== CREATE PRODUCT FINALLY ===')
       setIsLoading(false)
     }
   }
