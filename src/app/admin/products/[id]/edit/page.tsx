@@ -556,6 +556,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       if (formData.productType === 'VARIABLE') {
         // Önce tüm varyasyon tiplerini ve değerlerini veritabanına kaydet/güncelle
         const attributeValueMap = new Map<string, string>() // tempId -> realId mapping
+        const attributeIdMap = new Map<string, string>() // typeId -> attributeId mapping
         
         for (const type of variationTypes) {
           if (!type.name.trim() || type.values.length === 0) continue
@@ -578,11 +579,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               const newAttribute = await response.json()
               attributeId = newAttribute.id
             } else {
-              throw new Error(`Özellik "${type.name}" oluşturulamadı`)
+              const errorData = await response.json().catch(() => ({}))
+              console.error('Attribute creation error:', errorData)
+              throw new Error(`Özellik "${type.name}" oluşturulamadı: ${errorData.error || 'Bilinmeyen hata'}`)
             }
           }
 
           if (!attributeId) continue
+          
+          // Type ID'yi attribute ID ile eşleştir
+          attributeIdMap.set(type.id, attributeId)
 
           // Değerleri işle
           for (const val of type.values) {
@@ -609,10 +615,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 const newValue = await response.json()
                 valueId = newValue.id
               } else {
-                throw new Error(`Değer "${val.value}" oluşturulamadı`)
+                const errorData = await response.json().catch(() => ({}))
+                console.error('Value creation error:', errorData)
+                throw new Error(`Değer "${val.value}" oluşturulamadı: ${errorData.error || 'Bilinmeyen hata'}`)
               }
             }
 
+            // tempId -> realId mapping'i kaydet
             if (valueId && val.id) {
               attributeValueMap.set(val.id, valueId)
             }
@@ -624,7 +633,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           .filter(v => {
             const isValid = v.price.trim() !== '' && v.stock.trim() !== ''
             if (!isValid) {
-              console.log('Filtered out invalid variation:', v)
+              console.log('Filtered out invalid variation (missing price/stock):', v)
             }
             return isValid
           })
@@ -632,30 +641,64 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             // ID kontrolü: Eğer ID geçici değilse (veritabanından gelen) gönder
             const variationId = (v.id && typeof v.id === 'string' && !v.id.startsWith('var-')) ? v.id : undefined
             
+            // Attribute'ları gerçek ID'lerle eşleştir
+            const mappedAttributes = v.attributes.map(attr => {
+              // attributeId'yi bul - önce doğrudan, sonra typeId üzerinden
+              let realAttributeId = attr.attributeId
+              if (!realAttributeId || realAttributeId === '') {
+                // Type ID'yi bulmak için variationTypes'a bak
+                const matchingType = variationTypes.find(t => 
+                  t.values.some(v => v.id === attr.tempId)
+                )
+                if (matchingType && attributeIdMap.has(matchingType.id)) {
+                  realAttributeId = attributeIdMap.get(matchingType.id)!
+                }
+              }
+              
+              // attributeValueId'yi bul - önce tempId üzerinden, sonra doğrudan
+              let realValueId = attr.attributeValueId
+              if (!realValueId || realValueId === '') {
+                if (attr.tempId && attributeValueMap.has(attr.tempId)) {
+                  realValueId = attributeValueMap.get(attr.tempId)!
+                }
+              }
+              
+              return {
+                attributeId: realAttributeId,
+                attributeValueId: realValueId
+              }
+            }).filter(attr => {
+              const isValid = attr.attributeId && attr.attributeId !== '' && attr.attributeValueId && attr.attributeValueId !== ''
+              if (!isValid) {
+                console.log('Filtered out invalid attribute:', attr)
+              }
+              return isValid
+            })
+            
             return {
               id: variationId, // undefined gönder, API'de kontrol edilecek
               sku: v.sku || '',
               price: v.price,
               stock: v.stock,
-              attributes: v.attributes.map(attr => {
-                // Eğer tempId varsa ve attributeValueMap'te varsa gerçek ID'yi kullan
-                const realValueId = attr.tempId && attributeValueMap.has(attr.tempId) 
-                  ? attributeValueMap.get(attr.tempId)! 
-                  : attr.attributeValueId
-                
-                return {
-                  attributeId: attr.attributeId,
-                  attributeValueId: realValueId
-                }
-              }).filter(attr => attr.attributeId && attr.attributeValueId) // Geçersiz olanları filtrele
+              attributes: mappedAttributes
             }
           })
-          .filter(v => v.attributes.length > 0) // En az bir attribute olmalı
+          .filter(v => {
+            const isValid = v.attributes.length > 0
+            if (!isValid) {
+              console.log('Filtered out variation with no valid attributes:', v)
+            }
+            return isValid
+          })
         
         console.log('Final variations count:', finalVariations.length)
-        console.log('Final variations:', finalVariations)
+        console.log('Final variations:', JSON.stringify(finalVariations, null, 2))
         
         if (finalVariations.length === 0) {
+          console.error('No valid variations found. Generated variations:', generatedVariations)
+          console.error('Variation types:', variationTypes)
+          console.error('Attribute ID map:', Array.from(attributeIdMap.entries()))
+          console.error('Attribute value map:', Array.from(attributeValueMap.entries()))
           throw new Error('Varyasyonlu ürünler için en az bir varyasyon gereklidir. Lütfen varyasyon bilgilerini doldurun.')
         }
       }
