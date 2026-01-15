@@ -407,21 +407,29 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                         </div>
                         
                         <div className="bg-white rounded-lg p-4 space-y-3 border border-blue-100">
-                          <div className="space-y-2.5">
+                          <div className="space-y-3">
                             {selectedVariation.attributes.map((attr: any) => {
                               const attributeName = attr.attributeValue.attribute?.name || 'Seçenek'
-                              const attributePrice = attr.attributeValue.price || 0
+                              const attributePrice = attr.attributeValue.price ? Number(attr.attributeValue.price) : 0
                               return (
-                                <div key={attr.attributeValue.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-600">{attributeName}:</span>
-                                    <span className="text-sm font-semibold text-gray-900">{attr.attributeValue.value}</span>
+                                <div key={attr.attributeValue.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-semibold text-gray-700">{attributeName}:</span>
+                                      <span className="text-sm font-bold text-gray-900">{attr.attributeValue.value}</span>
+                                    </div>
                                   </div>
-                                  {attributePrice > 0 && (
-                                    <span className="text-sm font-semibold text-green-600">
-                                      +₺{Number(attributePrice).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                                    <span className="text-xs text-gray-500">Fiyat:</span>
+                                    <span className={`text-base font-bold ${
+                                      attributePrice > 0 ? 'text-green-600' : 'text-gray-600'
+                                    }`}>
+                                      {attributePrice > 0 
+                                        ? `₺${attributePrice.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                        : '₺0,00'
+                                      }
                                     </span>
-                                  )}
+                                  </div>
                                 </div>
                               )
                             })}
