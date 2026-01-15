@@ -149,7 +149,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
         attributeValue: {
                   id: attr.attributeValue?.id,
                   attributeId: attr.attributeValue?.attributeId,
-                  value: attr.attributeValue?.value
+                  value: attr.attributeValue?.value,
+                  price: attr.attributeValue?.price ? Number(attr.attributeValue.price) : null,
+                  attribute: attr.attributeValue?.attribute ? {
+                    id: attr.attributeValue.attribute.id,
+                    name: attr.attributeValue.attribute.name
+                  } : null
         }
       }))
             : []

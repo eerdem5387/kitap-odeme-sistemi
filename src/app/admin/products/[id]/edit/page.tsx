@@ -598,10 +598,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             if (!val.value.trim()) continue
 
             let valueId = val.valueId
+            const token = localStorage.getItem('token')
 
             // Value yoksa oluştur
             if (!valueId) {
-              const token = localStorage.getItem('token')
               const response = await fetch(`/api/attributes/${attributeId}/values`, {
                 method: 'POST',
                 headers: {
@@ -610,7 +610,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 },
                 body: JSON.stringify({ 
                   value: val.value,
-                  price: val.price ? parseFloat(val.price) : null
+                  price: val.price && val.price.trim() !== '' ? parseFloat(val.price) : null
                 })
               })
 
@@ -621,6 +621,25 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 const errorData = await response.json().catch(() => ({}))
                 console.error('Value creation error:', errorData)
                 throw new Error(`Değer "${val.value}" oluşturulamadı: ${errorData.error || 'Bilinmeyen hata'}`)
+              }
+            } else {
+              // Mevcut value'nun fiyatını güncelle
+              const priceValue = val.price && val.price.trim() !== '' ? parseFloat(val.price) : null
+              const response = await fetch(`/api/attributes/${attributeId}/values/${valueId}`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ 
+                  price: priceValue
+                })
+              })
+
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}))
+                console.error('Value update error:', errorData)
+                // Fiyat güncelleme hatası kritik değil, devam et
               }
             }
 

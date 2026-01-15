@@ -19,15 +19,31 @@ export default function CartPage() {
     
     const handleCartUpdate = () => loadCart()
     window.addEventListener('cartUpdated', handleCartUpdate)
-    return () => window.removeEventListener('cartUpdated', handleCartUpdate)
+    
+    // Sayfa görünür olduğunda kargo ayarlarını yenile
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadShippingSettings()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    // Sayfa focus olduğunda kargo ayarlarını yenile
+    const handleFocus = () => {
+      loadShippingSettings()
+    }
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      window.removeEventListener('cartUpdated', handleCartUpdate)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [])
 
-  const loadCart = () => {
+  const loadShippingSettings = () => {
     if (!isClient) return
-    const cart = cartService.getCart()
-    setCartItems(cart.items)
-    setIsLoading(false)
-
+    
     // Kargo ayarlarını yükle
     fetch('/api/settings?category=shipping')
       .then(res => res.ok ? res.json() : null)
@@ -44,6 +60,16 @@ export default function CartPage() {
       .catch(err => {
         console.error('Shipping settings load error (cart):', err)
       })
+  }
+
+  const loadCart = () => {
+    if (!isClient) return
+    const cart = cartService.getCart()
+    setCartItems(cart.items)
+    setIsLoading(false)
+    
+    // Kargo ayarlarını da yükle
+    loadShippingSettings()
   }
 
   const updateQuantity = (itemId: string, quantity: number, variationId?: string) => {

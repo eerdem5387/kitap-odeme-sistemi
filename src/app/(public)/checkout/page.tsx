@@ -148,6 +148,42 @@ export default function CheckoutPage() {
     }
 
     fetchData()
+    
+    // Sayfa görünür olduğunda kargo ayarlarını yenile
+    const loadShippingSettings = async () => {
+      try {
+        const res = await fetch('/api/settings?category=shipping')
+        if (res.ok) {
+          const data = await res.json()
+          const shippingSettings = data?.shipping || {}
+          if (typeof shippingSettings.defaultShippingCost === 'number') {
+            setShippingCost(shippingSettings.defaultShippingCost)
+          }
+          if (typeof shippingSettings.freeShippingThreshold === 'number') {
+            setFreeShippingThreshold(shippingSettings.freeShippingThreshold)
+          }
+        }
+      } catch (e) {
+        console.error('Shipping settings load error:', e)
+      }
+    }
+    
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadShippingSettings()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    const handleFocus = () => {
+      loadShippingSettings()
+    }
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
   }, []) // Boş dependency array - sadece component mount olduğunda çalışır
 
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0)
