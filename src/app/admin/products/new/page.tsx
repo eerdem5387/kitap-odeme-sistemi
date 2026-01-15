@@ -36,6 +36,7 @@ export default function NewProductPage() {
     sku: string
     price: string
     stock: string
+    isUnlimitedStock: boolean
     attributes: Array<{ attributeId: string; attributeValueId: string }>
     displayName: string // Gösterim için (örn: "Renk: Kırmızı | Beden: XL")
   }>>([])
@@ -193,6 +194,7 @@ export default function NewProductPage() {
       sku: '',
       price: '',
       stock: '',
+      isUnlimitedStock: false,
       attributes: combination.map(c => ({ 
         attributeId: c.attributeId || '', 
         attributeValueId: c.attributeValueId || '',
@@ -214,7 +216,7 @@ export default function NewProductPage() {
   }, [variationTypes, formData.productType])
 
   // Varyasyon güncelleme
-  const updateGeneratedVariation = (index: number, field: string, value: string) => {
+  const updateGeneratedVariation = (index: number, field: string, value: string | boolean) => {
     const updated = [...generatedVariations]
     updated[index] = { ...updated[index], [field]: value }
     setGeneratedVariations(updated)
@@ -306,7 +308,7 @@ export default function NewProductPage() {
         // Geçerli varyasyonları filtrele ve gerçek ID'lerle eşleştir
         finalVariations = generatedVariations
           .filter(v => {
-            const isValid = v.price.trim() !== '' && v.stock.trim() !== ''
+            const isValid = v.price.trim() !== '' && (v.isUnlimitedStock || v.stock.trim() !== '')
             if (!isValid) {
               console.log('Filtered out invalid variation (missing price/stock):', v)
             }
@@ -350,7 +352,7 @@ export default function NewProductPage() {
             return {
               sku: v.sku || '',
               price: v.price,
-              stock: v.stock,
+              stock: v.isUnlimitedStock ? -1 : parseInt(v.stock) || 0,
               attributes: mappedAttributes
             }
           })
@@ -979,15 +981,42 @@ export default function NewProductPage() {
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Stok *
                             </label>
-                            <input
-                              type="number"
-                              value={variation.stock}
-                              onChange={(e) => updateGeneratedVariation(index, 'stock', e.target.value)}
-                              min="0"
-                              required
-                              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
-                              placeholder="0"
-                            />
+                            <div className="space-y-2">
+                              <label className="flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={variation.isUnlimitedStock}
+                                  onChange={(e) => {
+                                    updateGeneratedVariation(index, 'isUnlimitedStock', e.target.checked)
+                                    if (e.target.checked) {
+                                      updateGeneratedVariation(index, 'stock', '')
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-700">
+                                  Sınırsız stok (Stokta gösterilecek)
+                                </span>
+                              </label>
+                              {!variation.isUnlimitedStock && (
+                                <input
+                                  type="number"
+                                  value={variation.stock}
+                                  onChange={(e) => updateGeneratedVariation(index, 'stock', e.target.value)}
+                                  min="0"
+                                  required
+                                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
+                                  placeholder="0"
+                                />
+                              )}
+                              {variation.isUnlimitedStock && (
+                                <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                                  <p className="text-sm text-green-700">
+                                    ✓ Bu varyasyon "Stokta" olarak gösterilecek
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
