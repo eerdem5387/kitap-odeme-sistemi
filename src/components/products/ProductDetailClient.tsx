@@ -472,60 +472,6 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                   </button>
                   <input
                     type="number"
-                          min={1}
-                          value={quantity}
-                          onChange={(e) =>
-                            handleQuantityChange(parseInt(e.target.value || '1', 10))
-                          }
-                          className="w-16 text-center border-none focus:ring-0"
-                        />
-                        <button
-                          className="px-3 py-2 text-gray-600 hover:text-gray-900"
-                          onClick={() => handleQuantityChange(quantity + 1)}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <button
-                        onClick={handleAddToCart}
-                        disabled={!selectedVariation}
-                        className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                      >
-                        <ShoppingCart className="h-5 w-5 mr-2" />
-                        Sepete Ekle
-                      </button>
-                    </div>
-
-                    {!selectedVariation && (
-                      <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 p-3 rounded-lg">
-                        {(() => {
-                          const availableAttributes = getAvailableAttributes()
-                          const selectedCount = availableAttributes.filter(attr => selectedAttributes[attr.id]).length
-                          const totalCount = availableAttributes.length
-                          
-                          if (selectedCount === 0) {
-                            return `Lütfen ${totalCount > 1 ? 'tüm özellikleri' : 'özelliği'} seçin`
-                          } else {
-                            return `Lütfen kalan ${totalCount - selectedCount} özelliği seçin`
-                          }
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex space-x-4">
-                <div className="flex items-center border border-gray-300 rounded-lg">
-                  <button
-                    className="px-3 py-2 text-gray-600 hover:text-gray-900"
-                    onClick={() => handleQuantityChange(quantity - 1)}
-                    disabled={quantity <= 1}
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
                     min={1}
                     value={quantity}
                     onChange={(e) =>

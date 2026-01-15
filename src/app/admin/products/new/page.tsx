@@ -210,6 +210,7 @@ export default function NewProductPage() {
     if (formData.productType === 'VARIABLE') {
       generateVariationsFromTypes()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variationTypes, formData.productType])
 
   // Varyasyon güncelleme
@@ -224,13 +225,6 @@ export default function NewProductPage() {
     setIsLoading(true)
 
     try {
-      console.log('=== HANDLE SUBMIT STARTED ===')
-      console.log('Product type:', formData.productType)
-      console.log('Is quick mode:', isQuickMode)
-      console.log('Quick variations:', quickVariations)
-      console.log('Variations:', variations)
-      console.log('Selected attributes:', selectedAttributes)
-
       // Varyasyonları hazırla
       let finalVariations: any[] = []
       
