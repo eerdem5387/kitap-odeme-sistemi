@@ -170,34 +170,55 @@ export async function PUT(
             sku = `${categoryPrefix}-${productName}-${timestamp}`
         }
 
-        // Ürünü güncelle
-        console.log('Updating product with data:', {
+        // Ürünü güncelle - TÜM ALANLARI KESINLIKLE GÜNCELLE
+        const updateData: any = {
             name: body.name,
-            price: body.price,
-            stock: body.stock,
-            productType: body.productType,
-            variationsCount: body.variations?.length || 0
-        })
+            description: body.description,
+            price: parseFloat(body.price.toString()), // Decimal için parseFloat
+            stock: typeof body.stock === 'number' ? body.stock : parseInt(body.stock?.toString() || '0'),
+            sku: sku,
+            categoryId: body.categoryId,
+            productType: body.productType || existingProduct.productType, // productType alanını güncelle
+            isActive: body.isActive !== undefined ? body.isActive : existingProduct.isActive,
+            isFeatured: body.isFeatured !== undefined ? body.isFeatured : existingProduct.isFeatured,
+            images: Array.isArray(body.images) ? body.images : existingProduct.images
+        }
+        
+        // Opsiyonel alanları ekle
+        if (body.comparePrice !== undefined) {
+            updateData.comparePrice = parseFloat(body.comparePrice.toString())
+        }
+        if (body.weight !== undefined) {
+            updateData.weight = body.weight !== null ? parseFloat(body.weight.toString()) : null
+        }
+        if (body.dimensions !== undefined) {
+            updateData.dimensions = body.dimensions
+        }
+        
+        console.log('=== UPDATING PRODUCT ===')
+        console.log('Product ID:', productId)
+        console.log('Update data:', JSON.stringify(updateData, null, 2))
+        console.log('Product type from body:', body.productType)
+        console.log('Stock from body:', body.stock, 'Type:', typeof body.stock)
+        console.log('Price from body:', body.price, 'Type:', typeof body.price)
         
         const updatedProduct = await prisma.product.update({
             where: { id: productId },
-            data: {
-                name: body.name,
-                description: body.description,
-                price: body.price,
-                comparePrice: body.comparePrice,
-                stock: body.stock,
-                sku: sku,
-                categoryId: body.categoryId,
-                isActive: body.isActive,
-                isFeatured: body.isFeatured,
-                images: body.images
-            },
+            data: updateData,
             include: {
                 category: true
             }
         })
-        console.log('Product updated successfully:', updatedProduct.id)
+        
+        console.log('=== PRODUCT UPDATE RESULT ===')
+        console.log('Updated product ID:', updatedProduct.id)
+        console.log('Updated product name:', updatedProduct.name)
+        console.log('Updated product type:', updatedProduct.productType)
+        console.log('Updated product price:', updatedProduct.price.toString())
+        console.log('Updated product stock:', updatedProduct.stock)
+        console.log('Updated product SKU:', updatedProduct.sku)
+        console.log('Updated product isActive:', updatedProduct.isActive)
+        console.log('Updated product isFeatured:', updatedProduct.isFeatured)
 
         // Varyasyonlu ürünse varyasyonları güncelle
         if (body.productType === 'VARIABLE' && body.variations && Array.isArray(body.variations)) {
@@ -412,12 +433,25 @@ export async function PUT(
 
         console.log('=== PRODUCT UPDATE SUCCESS ===')
         console.log('Final product variations count:', productWithVariations?.variations?.length || 0)
+        console.log('Final product data:', {
+            id: productWithVariations?.id,
+            name: productWithVariations?.name,
+            productType: productWithVariations?.productType,
+            price: productWithVariations?.price,
+            stock: productWithVariations?.stock,
+            sku: productWithVariations?.sku
+        })
         
         if (!productWithVariations) {
             throw new NotFoundError('Güncellenmiş ürün bulunamadı')
         }
 
-        return NextResponse.json(productWithVariations)
+        // Cache'i bypass etmek için header ekle
+        const response = NextResponse.json(productWithVariations)
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+        response.headers.set('Pragma', 'no-cache')
+        response.headers.set('Expires', '0')
+        return response
 
     } catch (error) {
         console.error('=== PRODUCT UPDATE ERROR ===')

@@ -125,34 +125,48 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   }, [])
 
   // Ürün verilerini yükle (availableAttributes yüklendikten sonra)
-  useEffect(() => {
-    const fetchProduct = async () => {
-      // availableAttributes henüz yüklenmediyse bekle
-      if (availableAttributes.length === 0) {
-        return
-      }
+  const fetchProduct = async (forceRefresh = false) => {
+    // availableAttributes henüz yüklenmediyse bekle
+    if (availableAttributes.length === 0 && !forceRefresh) {
+      return
+    }
 
-      try {
-        const response = await fetch(`/api/products/${productId}`)
-        if (response.ok) {
-          const product: Product = await response.json()
+    try {
+      setIsLoading(true)
+      // Cache bypass için timestamp ekle
+      const response = await fetch(`/api/products/${productId}?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
+      if (response.ok) {
+        const product: Product = await response.json()
+        
+        console.log('=== FETCHED PRODUCT DATA ===')
+        console.log('Product ID:', product.id)
+        console.log('Product name:', product.name)
+        console.log('Product type:', product.productType)
+        console.log('Product price:', product.price)
+        console.log('Product stock:', product.stock)
           
-          setFormData({
-            name: product.name,
-            description: product.description,
-            price: product.price.toString(),
-            comparePrice: product.comparePrice?.toString() || '',
-            stock: product.stock.toString(),
-            sku: product.sku || '',
-            categoryId: product.categoryId,
-            productType: product.productType,
-            isActive: product.isActive,
-            isFeatured: product.isFeatured,
-            images: product.images
-          })
+        setFormData({
+          name: product.name,
+          description: product.description,
+          price: product.price.toString(),
+          comparePrice: product.comparePrice?.toString() || '',
+          stock: product.stock === -1 ? '0' : product.stock.toString(),
+          sku: product.sku || '',
+          categoryId: product.categoryId,
+          productType: product.productType,
+          isActive: product.isActive,
+          isFeatured: product.isFeatured,
+          images: product.images
+        })
 
-          // Sınırsız stok durumunu kontrol et (stock = -1 ise sınırsız)
-          setIsUnlimitedStock(product.stock === -1)
+        // Sınırsız stok durumunu kontrol et (stock = -1 ise sınırsız)
+        setIsUnlimitedStock(product.stock === -1)
 
           // Varyasyonlu ürünse varyasyonları yükle - Yeni basit sistem
           if (product.productType === 'VARIABLE' && product.variations && product.variations.length > 0) {
@@ -248,10 +262,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       }
     }
 
+  // Ürün verilerini yükle (availableAttributes yüklendikten sonra)
+  useEffect(() => {
     if (productId && availableAttributes.length > 0) {
       fetchProduct()
     }
-  }, [productId, availableAttributes])
+  }, [productId, availableAttributes.length])
 
   // Toast notification gösterme fonksiyonu
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -661,7 +677,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           })
           .map(v => {
             // ID kontrolü: Eğer ID geçici değilse (veritabanından gelen) gönder
-            const variationId = (v.id && typeof v.id === 'string' && !v.id.startsWith('var-')) ? v.id : undefined
+            // Mevcut varyasyonların ID'lerini koru
+            const variationId = (v.id && typeof v.id === 'string' && !v.id.startsWith('var-') && !v.id.startsWith('type-') && !v.id.startsWith('value-')) ? v.id : undefined
+            
+            console.log(`Variation mapping - Original ID: ${v.id}, Final ID: ${variationId}`)
             
             // Attribute'ları gerçek ID'lerle eşleştir
             const mappedAttributes = v.attributes.map(attr => {
@@ -768,13 +787,28 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       const responseData = await response.json()
       console.log('API Success Response:', responseData)
       console.log('=== FORM SUBMIT SUCCESS ===')
+      console.log('Updated product data:', {
+        id: responseData.id,
+        name: responseData.name,
+        productType: responseData.productType,
+        price: responseData.price,
+        stock: responseData.stock
+      })
+
+      // Veritabanından güncel veriyi tekrar yükle (cache bypass)
+      await fetchProduct(true)
 
       showNotification('success', 'Ürün başarıyla güncellendi')
       
-      // Kısa bir gecikme sonrası yönlendir (kullanıcı mesajı görebilsin)
+      // Ürün listesini yenile
+      if (typeof window !== 'undefined' && (window as any).refreshAdminProducts) {
+        (window as any).refreshAdminProducts()
+      }
+      
+      // Kısa bir gecikme sonrası ürün listesine yönlendir
       setTimeout(() => {
         router.push('/admin/products')
-      }, 1000)
+      }, 1500)
     } catch (error) {
       console.error('=== FORM SUBMIT ERROR ===')
       console.error('Error updating product:', error)
@@ -1203,19 +1237,33 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                               Stok *
                             </label>
                             <div className="space-y-2">
-                              <label className="flex items-center cursor-pointer">
+                              <label className="flex items-center cursor-pointer select-none">
                                 <input
                                   type="checkbox"
-                                  checked={variation.isUnlimitedStock}
+                                  checked={variation.isUnlimitedStock || false}
                                   onChange={(e) => {
+                                    e.stopPropagation()
                                     updateGeneratedVariation(index, 'isUnlimitedStock', e.target.checked)
                                     if (e.target.checked) {
                                       updateGeneratedVariation(index, 'stock', '')
                                     }
                                   }}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                  style={{ pointerEvents: 'auto', zIndex: 10 }}
                                 />
-                                <span className="ml-2 text-sm text-gray-700">
+                                <span 
+                                  className="ml-2 text-sm text-gray-700 cursor-pointer"
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    const newValue = !variation.isUnlimitedStock
+                                    updateGeneratedVariation(index, 'isUnlimitedStock', newValue)
+                                    if (newValue) {
+                                      updateGeneratedVariation(index, 'stock', '')
+                                    }
+                                  }}
+                                >
                                   Sınırsız stok (Stokta gösterilecek)
                                 </span>
                               </label>
