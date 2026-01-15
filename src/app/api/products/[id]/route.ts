@@ -200,11 +200,11 @@ export async function PUT(
             // Gelen varyasyonları işle
             for (const variationData of body.variations) {
                 // Varyasyon ID'sini kontrol et
-                // ID yoksa, undefined ise, null ise, geçici ID ise veya mevcut varyasyonlarda yoksa yeni varyasyon
+                // ID varsa ve mevcut varyasyonlarda varsa güncelle, yoksa yeni oluştur
                 const hasValidId = variationData.id !== undefined && 
                                   variationData.id !== null &&
+                                  variationData.id !== '' &&
                                   typeof variationData.id === 'string' && 
-                                  variationData.id.trim() !== '' &&
                                   !variationData.id.startsWith('var-') && 
                                   !variationData.id.startsWith('quick-') &&
                                   existingVariationIds.includes(variationData.id)
@@ -212,6 +212,7 @@ export async function PUT(
                 const isNewVariation = !hasValidId
 
                 console.log(`Variation ID: ${variationData.id}, isNew: ${isNewVariation}, hasValidId: ${hasValidId}, existingIds:`, existingVariationIds)
+                console.log(`Variation data:`, { id: variationData.id, price: variationData.price, stock: variationData.stock, attributes: variationData.attributes })
 
                 if (isNewVariation) {
                     // Yeni varyasyon oluştur
@@ -277,9 +278,10 @@ export async function PUT(
                     }
                 } else {
                     // Mevcut varyasyonu güncelle
+                    console.log(`Updating existing variation: ${variationData.id}`)
                     incomingVariationIds.add(variationData.id)
 
-                    await prisma.productVariation.update({
+                    const updateResult = await prisma.productVariation.update({
                         where: { id: variationData.id },
                         data: {
                             sku: variationData.sku || undefined,
@@ -287,14 +289,16 @@ export async function PUT(
                             stock: parseInt(variationData.stock || '0')
                         }
                     })
+                    console.log(`Variation updated:`, updateResult)
 
                     // Varyasyon özelliklerini güncelle (önce mevcut özellikleri sil, sonra yenilerini ekle)
-                    await prisma.productVariationAttribute.deleteMany({
+                    const deletedCount = await prisma.productVariationAttribute.deleteMany({
                         where: { variationId: variationData.id }
                     })
+                    console.log(`Deleted ${deletedCount.count} old attributes`)
 
                     // Yeni özellikleri ekle
-                    if (variationData.attributes && Array.isArray(variationData.attributes)) {
+                    if (variationData.attributes && Array.isArray(variationData.attributes) && variationData.attributes.length > 0) {
                         for (const attr of variationData.attributes) {
                             // Yeni format: attributeId ve attributeValueId kullanılıyor
                             if (attr.attributeId && attr.attributeValueId) {
@@ -341,6 +345,9 @@ export async function PUT(
                                 })
                             }
                         }
+                        console.log(`Added ${variationData.attributes.length} new attributes`)
+                    } else {
+                        console.log(`No attributes to add for variation ${variationData.id}`)
                     }
                 }
             }

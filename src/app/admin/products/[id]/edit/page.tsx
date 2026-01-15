@@ -693,10 +693,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               return null
             }
             // ID kontrolü: Eğer ID geçici değilse (veritabanından gelen) gönder
-            // undefined gönderme, boş string veya null da gönderme - sadece geçerli ID gönder
-            const variationId = (qv.id && typeof qv.id === 'string' && !qv.id.startsWith('quick-')) ? qv.id : null
+            // Mevcut varyasyonların ID'sini mutlaka gönder
+            const variationId = (qv.id && typeof qv.id === 'string' && !qv.id.startsWith('quick-')) ? qv.id : undefined
             return {
-              ...(variationId ? { id: variationId } : {}), // ID varsa ekle, yoksa ekleme
+              id: variationId, // undefined gönder, API'de kontrol edilecek
               sku: qv.sku || '',
               price: qv.price,
               stock: qv.stock || '1',
@@ -710,10 +710,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           .filter(v => v.price.trim() !== '' && v.stock.trim() !== '')
           .map(v => {
             // ID kontrolü: Eğer ID geçici değilse (veritabanından gelen) gönder
-            // undefined gönderme, boş string veya null da gönderme - sadece geçerli ID gönder
-            const variationId = (v.id && typeof v.id === 'string' && !v.id.startsWith('var-')) ? v.id : null
+            // Mevcut varyasyonların ID'sini mutlaka gönder
+            const variationId = (v.id && typeof v.id === 'string' && !v.id.startsWith('var-')) ? v.id : undefined
             return {
-              ...(variationId ? { id: variationId } : {}), // ID varsa ekle, yoksa ekleme
+              id: variationId, // undefined gönder, API'de kontrol edilecek
               sku: v.sku || '',
               price: v.price,
               stock: v.stock,
