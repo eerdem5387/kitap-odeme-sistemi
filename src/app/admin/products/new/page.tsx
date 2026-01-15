@@ -299,42 +299,82 @@ export default function NewProductPage() {
     setIsLoading(true)
 
     try {
+      console.log('=== HANDLE SUBMIT STARTED ===')
+      console.log('Product type:', formData.productType)
+      console.log('Is quick mode:', isQuickMode)
+      console.log('Quick variations:', quickVariations)
+      console.log('Variations:', variations)
+      console.log('Selected attributes:', selectedAttributes)
+
       // Hızlı modda quickVariations'ı variations formatına çevir
-      let finalVariations = variations
-      if (isQuickMode && quickVariations.length > 0 && selectedAttributes.length === 1) {
-        const selectedAttr = selectedAttributes[0]
-        const attributeData = availableAttributes.find(a => a.id === selectedAttr.attributeId)
-        
-        finalVariations = quickVariations
-          .filter(qv => qv.name.trim() !== '' && qv.price.trim() !== '')
-          .map(qv => {
-            // Değer ID'sini bul
-            const valueData = attributeData?.values.find(v => v.value === qv.name.trim())
-            if (!valueData) {
-              showNotification('error', `"${qv.name}" değeri bulunamadı. Lütfen özellik değerlerinden seçin.`)
-              return null
-            }
-            return {
-              sku: qv.sku || '',
-              price: qv.price,
-              stock: qv.stock || '1',
-              attributes: [{ attributeId: selectedAttr.attributeId, attributeValueId: valueData.id }]
-            }
-          })
-          .filter(v => v !== null) as any[]
-      } else if (!isQuickMode && variations.length > 0) {
-        // Normal mod - zaten attribute ID'leri var
-        finalVariations = variations
-          .filter(v => v.price.trim() !== '' && v.stock.trim() !== '')
-          .map(v => ({
-            sku: v.sku || '',
-            price: v.price,
-            stock: v.stock,
-            attributes: v.attributes.map(attr => ({
-              attributeId: attr.attributeId,
-              attributeValueId: attr.attributeValueId
+      let finalVariations: any[] = []
+      
+      if (formData.productType === 'VARIABLE') {
+        if (isQuickMode && quickVariations.length > 0 && selectedAttributes.length === 1) {
+          const selectedAttr = selectedAttributes[0]
+          const attributeData = availableAttributes.find(a => a.id === selectedAttr.attributeId)
+          
+          console.log('Processing quick mode variations')
+          console.log('Selected attr:', selectedAttr)
+          console.log('Attribute data:', attributeData)
+          
+          finalVariations = quickVariations
+            .filter(qv => {
+              const isValid = qv.name.trim() !== '' && qv.price.trim() !== ''
+              if (!isValid) {
+                console.log('Filtered out invalid quick variation:', qv)
+              }
+              return isValid
+            })
+            .map(qv => {
+              // Değer ID'sini bul
+              const valueData = attributeData?.values.find(v => v.value === qv.name.trim())
+              if (!valueData) {
+                console.error(`Value not found for: "${qv.name}"`)
+                showNotification('error', `"${qv.name}" değeri bulunamadı. Lütfen özellik değerlerinden seçin.`)
+                return null
+              }
+              return {
+                sku: qv.sku || '',
+                price: qv.price,
+                stock: qv.stock || '1',
+                attributes: [{ attributeId: selectedAttr.attributeId, attributeValueId: valueData.id }]
+              }
+            })
+            .filter(v => v !== null) as any[]
+        } else if (!isQuickMode && variations.length > 0) {
+          // Normal mod - zaten attribute ID'leri var
+          console.log('Processing normal mode variations')
+          finalVariations = variations
+            .filter(v => {
+              const isValid = v.price.trim() !== '' && v.stock.trim() !== ''
+              if (!isValid) {
+                console.log('Filtered out invalid variation:', v)
+              }
+              return isValid
+            })
+            .map(v => ({
+              sku: v.sku || '',
+              price: v.price,
+              stock: v.stock,
+              attributes: v.attributes.map(attr => ({
+                attributeId: attr.attributeId,
+                attributeValueId: attr.attributeValueId
+              }))
             }))
-          }))
+        }
+        
+        console.log('Final variations count:', finalVariations.length)
+        console.log('Final variations:', finalVariations)
+        
+        if (finalVariations.length === 0) {
+          throw new Error('Varyasyonlu ürünler için en az bir varyasyon gereklidir. Lütfen varyasyon bilgilerini doldurun.')
+        }
+      }
+
+      // Varyasyonlu ürün için kontrol
+      if (formData.productType === 'VARIABLE' && finalVariations.length === 0) {
+        throw new Error('Varyasyonlu ürünler için en az bir varyasyon gereklidir. Lütfen varyasyon bilgilerini doldurun.')
       }
 
       const productData = {
@@ -350,6 +390,8 @@ export default function NewProductPage() {
 
       console.log('=== SENDING PRODUCT DATA ===')
       console.log('Product data:', JSON.stringify(productData, null, 2))
+      console.log('Variations count:', finalVariations.length)
+      console.log('Variations:', finalVariations)
 
       const token = localStorage.getItem('token')
       if (!token) {
