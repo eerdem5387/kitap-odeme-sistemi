@@ -698,10 +698,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             })
             
             return {
-              id: variationId, // undefined gönder, API'de kontrol edilecek
+              id: variationId || undefined, // undefined gönder, API'de kontrol edilecek
               sku: v.sku || '',
               price: v.price,
-              stock: v.isUnlimitedStock ? -1 : parseInt(v.stock) || 0,
+              stock: v.isUnlimitedStock ? -1 : (parseInt(v.stock) || 0),
               attributes: mappedAttributes
             }
           })
@@ -1225,7 +1225,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                                   value={variation.stock}
                                   onChange={(e) => updateGeneratedVariation(index, 'stock', e.target.value)}
                                   min="0"
-                                  required
+                                  required={!variation.isUnlimitedStock}
                                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
                                   placeholder="0"
                                 />

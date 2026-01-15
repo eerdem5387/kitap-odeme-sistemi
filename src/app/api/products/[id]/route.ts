@@ -123,6 +123,7 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        console.log('=== PRODUCT UPDATE API CALLED ===')
         // Admin yetkisi kontrolü
         const authHeader = request.headers.get('authorization')
         requireAdmin(authHeader)
@@ -136,6 +137,7 @@ export async function PUT(
         }
 
         const body = await request.json()
+        console.log('Request body received:', JSON.stringify(body, null, 2))
 
         // Ürünün var olup olmadığını kontrol et
         const existingProduct = await prisma.product.findUnique({
@@ -169,6 +171,14 @@ export async function PUT(
         }
 
         // Ürünü güncelle
+        console.log('Updating product with data:', {
+            name: body.name,
+            price: body.price,
+            stock: body.stock,
+            productType: body.productType,
+            variationsCount: body.variations?.length || 0
+        })
+        
         const updatedProduct = await prisma.product.update({
             where: { id: productId },
             data: {
@@ -187,6 +197,7 @@ export async function PUT(
                 category: true
             }
         })
+        console.log('Product updated successfully:', updatedProduct.id)
 
         // Varyasyonlu ürünse varyasyonları güncelle
         if (body.productType === 'VARIABLE' && body.variations && Array.isArray(body.variations)) {
@@ -216,12 +227,17 @@ export async function PUT(
 
                 if (isNewVariation) {
                     // Yeni varyasyon oluştur
+                    // Stock değerini kontrol et: string olarak "-1" gelebilir veya number olarak -1
+                    const stockValue = typeof variationData.stock === 'string' 
+                        ? (variationData.stock === '-1' || variationData.stock.trim() === '-1' ? -1 : parseInt(variationData.stock || '0'))
+                        : (variationData.stock === -1 ? -1 : parseInt(variationData.stock?.toString() || '0'))
+                    
                     const newVariation = await prisma.productVariation.create({
                         data: {
                             productId: productId,
                             sku: variationData.sku || undefined,
                             price: parseFloat(variationData.price),
-                            stock: parseInt(variationData.stock || '0')
+                            stock: stockValue
                         }
                     })
 
@@ -281,12 +297,17 @@ export async function PUT(
                     console.log(`Updating existing variation: ${variationData.id}`)
                     incomingVariationIds.add(variationData.id)
 
+                    // Stock değerini kontrol et: string olarak "-1" gelebilir veya number olarak -1
+                    const stockValue = typeof variationData.stock === 'string' 
+                        ? (variationData.stock === '-1' || variationData.stock.trim() === '-1' ? -1 : parseInt(variationData.stock || '0'))
+                        : (variationData.stock === -1 ? -1 : parseInt(variationData.stock?.toString() || '0'))
+                    
                     const updateResult = await prisma.productVariation.update({
                         where: { id: variationData.id },
                         data: {
                             sku: variationData.sku || undefined,
                             price: parseFloat(variationData.price),
-                            stock: parseInt(variationData.stock || '0')
+                            stock: stockValue
                         }
                     })
                     console.log(`Variation updated:`, updateResult)
@@ -389,9 +410,18 @@ export async function PUT(
             }
         })
 
+        console.log('=== PRODUCT UPDATE SUCCESS ===')
+        console.log('Final product variations count:', productWithVariations?.variations?.length || 0)
+        
+        if (!productWithVariations) {
+            throw new NotFoundError('Güncellenmiş ürün bulunamadı')
+        }
+
         return NextResponse.json(productWithVariations)
 
     } catch (error) {
+        console.error('=== PRODUCT UPDATE ERROR ===')
+        console.error('Error:', error)
         return handleApiError(error)
     }
 } 
