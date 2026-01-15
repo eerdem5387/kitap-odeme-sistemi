@@ -37,10 +37,21 @@ export async function DELETE(
     try {
         // Admin yetkisi kontrolü
         const authHeader = request.headers.get('authorization')
-        requireAdmin(authHeader)
+        try {
+            requireAdmin(authHeader)
+        } catch (authError) {
+            return handleApiError(authError)
+        }
 
         const resolvedParams = await params
         const { valueId } = resolvedParams
+
+        if (!valueId) {
+            return NextResponse.json(
+                { error: 'Değer ID gereklidir' },
+                { status: 400 }
+            )
+        }
 
         // Değerin kullanılıp kullanılmadığını kontrol et
         const usageCount = await prisma.productVariationAttribute.count({
@@ -66,6 +77,7 @@ export async function DELETE(
 
         return NextResponse.json({ success: true, message: 'Değer başarıyla silindi' })
     } catch (error) {
+        console.error('Delete attribute value error:', error)
         return handleApiError(error)
     }
 }

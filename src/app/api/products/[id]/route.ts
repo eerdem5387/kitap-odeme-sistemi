@@ -193,13 +193,25 @@ export async function PUT(
             const incomingVariationIds = new Set<string>()
             const existingVariationIds = existingProduct.variations.map(v => v.id)
 
+            console.log('=== VARIATION UPDATE ===')
+            console.log('Existing variation IDs:', existingVariationIds)
+            console.log('Incoming variations:', body.variations.map(v => ({ id: v.id, price: v.price, stock: v.stock })))
+
             // Gelen varyasyonları işle
             for (const variationData of body.variations) {
-                // Varyasyon ID'sini kontrol et (geçici ID'ler var- veya quick- ile başlayabilir)
-                const isNewVariation = !variationData.id || 
-                                      variationData.id.startsWith('var-') || 
-                                      variationData.id.startsWith('quick-') ||
-                                      !existingVariationIds.includes(variationData.id)
+                // Varyasyon ID'sini kontrol et
+                // ID yoksa, undefined ise, null ise, geçici ID ise veya mevcut varyasyonlarda yoksa yeni varyasyon
+                const hasValidId = variationData.id !== undefined && 
+                                  variationData.id !== null &&
+                                  typeof variationData.id === 'string' && 
+                                  variationData.id.trim() !== '' &&
+                                  !variationData.id.startsWith('var-') && 
+                                  !variationData.id.startsWith('quick-') &&
+                                  existingVariationIds.includes(variationData.id)
+                
+                const isNewVariation = !hasValidId
+
+                console.log(`Variation ID: ${variationData.id}, isNew: ${isNewVariation}, hasValidId: ${hasValidId}, existingIds:`, existingVariationIds)
 
                 if (isNewVariation) {
                     // Yeni varyasyon oluştur

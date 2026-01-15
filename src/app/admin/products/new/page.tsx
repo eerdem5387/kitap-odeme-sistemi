@@ -971,12 +971,13 @@ export default function NewProductPage() {
                                           
                                           showNotification('success', `"${value.value}" değeri silindi`)
                                         } else {
-                                          const error = await response.json()
-                                          showNotification('error', error.error || 'Değer silinirken bir hata oluştu')
+                                          const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen hata' }))
+                                          console.error('Delete error response:', errorData)
+                                          showNotification('error', errorData.error || `Değer silinirken bir hata oluştu (${response.status})`)
                                         }
                                       } catch (error) {
                                         console.error('Error deleting value:', error)
-                                        showNotification('error', 'Değer silinirken bir hata oluştu')
+                                        showNotification('error', `Değer silinirken bir hata oluştu: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`)
                                       }
                                     }}
                                     className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1.5 rounded transition-colors"

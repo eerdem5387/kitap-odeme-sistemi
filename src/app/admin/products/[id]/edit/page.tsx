@@ -211,7 +211,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 const valueName = attr?.attributeValue?.value || ''
                 
                 return {
-                  id: variation.id,
+                  id: variation.id, // Mevcut varyasyon ID'sini koru
                   name: valueName,
                   price: variation.price.toString(),
                   stock: variation.stock.toString(),
@@ -678,7 +678,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
     try {
       // Hızlı modda quickVariations'ı variations formatına çevir
-      let finalVariations = variations
+      let finalVariations: any[] = []
       if (isQuickMode && quickVariations.length > 0 && selectedAttributes.length === 1) {
         const selectedAttr = selectedAttributes[0]
         const attributeData = availableAttributes.find(a => a.id === selectedAttr.attributeId)
@@ -692,8 +692,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
               showNotification('error', `"${qv.name}" değeri bulunamadı. Lütfen özellik değerlerinden seçin.`)
               return null
             }
+            // ID kontrolü: Eğer ID geçici değilse (veritabanından gelen) gönder
+            // undefined gönderme, boş string veya null da gönderme - sadece geçerli ID gönder
+            const variationId = (qv.id && typeof qv.id === 'string' && !qv.id.startsWith('quick-')) ? qv.id : null
             return {
-              id: qv.id.startsWith('quick-') ? undefined : qv.id, // Yeni varyasyonlar için id gönderme
+              ...(variationId ? { id: variationId } : {}), // ID varsa ekle, yoksa ekleme
               sku: qv.sku || '',
               price: qv.price,
               stock: qv.stock || '1',
@@ -705,17 +708,24 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         // Normal mod - zaten attribute ID'leri var
         finalVariations = variations
           .filter(v => v.price.trim() !== '' && v.stock.trim() !== '')
-          .map(v => ({
-            id: v.id.startsWith('var-') ? undefined : v.id, // Yeni varyasyonlar için id gönderme
-            sku: v.sku || '',
-            price: v.price,
-            stock: v.stock,
-            attributes: v.attributes.map(attr => ({
-              attributeId: attr.attributeId,
-              attributeValueId: attr.attributeValueId
-            }))
-          }))
+          .map(v => {
+            // ID kontrolü: Eğer ID geçici değilse (veritabanından gelen) gönder
+            // undefined gönderme, boş string veya null da gönderme - sadece geçerli ID gönder
+            const variationId = (v.id && typeof v.id === 'string' && !v.id.startsWith('var-')) ? v.id : null
+            return {
+              ...(variationId ? { id: variationId } : {}), // ID varsa ekle, yoksa ekleme
+              sku: v.sku || '',
+              price: v.price,
+              stock: v.stock,
+              attributes: v.attributes.map(attr => ({
+                attributeId: attr.attributeId,
+                attributeValueId: attr.attributeValueId
+              }))
+            }
+          })
       }
+      
+      console.log('Final variations to send:', finalVariations)
 
       const productData = {
         ...formData,
@@ -726,6 +736,10 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         images: formData.images,
         variations: formData.productType === 'VARIABLE' ? finalVariations : undefined
       }
+
+      console.log('Sending product data:', JSON.stringify(productData, null, 2))
+      console.log('Variations count:', finalVariations.length)
+      console.log('Variation IDs:', finalVariations.map(v => v.id))
 
       const token = localStorage.getItem('token')
       const response = await fetch(`/api/products/${productId}`, {
@@ -1215,12 +1229,13 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                                           
                                           showNotification('success', `"${value.value}" değeri silindi`)
                                         } else {
-                                          const error = await response.json()
-                                          showNotification('error', error.error || 'Değer silinirken bir hata oluştu')
+                                          const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen hata' }))
+                                          console.error('Delete error response:', errorData)
+                                          showNotification('error', errorData.error || `Değer silinirken bir hata oluştu (${response.status})`)
                                         }
                                       } catch (error) {
                                         console.error('Error deleting value:', error)
-                                        showNotification('error', 'Değer silinirken bir hata oluştu')
+                                        showNotification('error', `Değer silinirken bir hata oluştu: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`)
                                       }
                                     }}
                                     className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1.5 rounded transition-colors"
