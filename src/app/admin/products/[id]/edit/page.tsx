@@ -257,39 +257,154 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setTimeout(() => setNotification(null), 3000)
   }
 
-  // Attribute seçme (mevcut attribute'lardan)
-  const addSelectedAttribute = (attributeId: string) => {
-    const attribute = availableAttributes.find(attr => attr.id === attributeId)
-    if (!attribute) return
+  // Yeni varyasyon tipi ekle
+  const addVariationType = () => {
+    const newType = {
+      id: `type-${Date.now()}`,
+      attributeId: null,
+      name: '',
+      values: []
+    }
+    setVariationTypes([...variationTypes, newType])
+  }
 
-    // Zaten seçili mi kontrol et
-    if (selectedAttributes.some(sa => sa.attributeId === attributeId)) {
-      showNotification('error', 'Bu özellik zaten seçili')
+  // Varyasyon tipini kaldır
+  const removeVariationType = (typeId: string) => {
+    setVariationTypes(variationTypes.filter(t => t.id !== typeId))
+    generateVariationsFromTypes()
+  }
+
+  // Varyasyon tipi adını güncelle
+  const updateVariationTypeName = (typeId: string, name: string) => {
+    const updated = variationTypes.map(t => 
+      t.id === typeId ? { ...t, name } : t
+    )
+    setVariationTypes(updated)
+  }
+
+  // Varyasyon tipine değer ekle
+  const addValueToVariationType = (typeId: string) => {
+    const updated = variationTypes.map(t => 
+      t.id === typeId 
+        ? { ...t, values: [...t.values, { id: `value-${Date.now()}`, valueId: null, value: '', price: '' }] }
+        : t
+    )
+    setVariationTypes(updated)
+  }
+
+  // Varyasyon tipinden değer kaldır
+  const removeValueFromVariationType = (typeId: string, valueId: string) => {
+    const updated = variationTypes.map(t => 
+      t.id === typeId 
+        ? { ...t, values: t.values.filter(v => v.id !== valueId) }
+        : t
+    )
+    setVariationTypes(updated)
+    generateVariationsFromTypes()
+  }
+
+  // Varyasyon tipi değerini güncelle
+  const updateVariationTypeValue = (typeId: string, valueId: string, field: 'value' | 'price', newValue: string) => {
+    const updated = variationTypes.map(t => 
+      t.id === typeId 
+        ? { 
+            ...t, 
+            values: t.values.map(v => 
+              v.id === valueId ? { ...v, [field]: newValue } : v
+            )
+          }
+        : t
+    )
+    setVariationTypes(updated)
+    generateVariationsFromTypes()
+  }
+
+  // Varyasyonları otomatik oluştur (tüm kombinasyonlar) - Sadece kombinasyonları hesapla
+  const generateVariationsFromTypes = () => {
+    const validTypes = variationTypes.filter(t => t.name.trim() && t.values.length > 0 && t.values.some(v => v.value.trim()))
+    
+    if (validTypes.length === 0) {
+      // Mevcut varyasyonları koru, sadece geçersiz kombinasyonları temizle
+      setGeneratedVariations(prev => prev.filter(v => {
+        // Mevcut varyasyonları koru (veritabanından gelen)
+        if (!v.id.startsWith('var-')) return true
+        return false
+      }))
       return
     }
 
-    const newSelected = {
-      attributeId: attribute.id,
-      attributeName: attribute.name,
-      selectedValues: [] // Başlangıçta boş
+    // Tüm kombinasyonları oluştur
+    const combinations: Array<Array<{ attributeId: string | null; attributeValueId: string | null; displayName: string; tempId?: string }>> = []
+    
+    const generate = (current: Array<{ attributeId: string | null; attributeValueId: string | null; displayName: string; tempId?: string }>, index: number) => {
+      if (index === validTypes.length) {
+        combinations.push([...current])
+        return
+      }
+      
+      const type = validTypes[index]
+      const validValues = type.values.filter(v => v.value.trim())
+      
+      for (const val of validValues) {
+        generate([...current, { 
+          attributeId: type.attributeId,
+          attributeValueId: val.valueId,
+          displayName: `${type.name}: ${val.value}`,
+          tempId: val.id
+        }], index + 1)
+      }
     }
-    setSelectedAttributes([...selectedAttributes, newSelected])
+    
+    generate([], 0)
+
+    // Mevcut varyasyonları koru, yeni kombinasyonlar için boş varyasyonlar ekle
+    const existingCombinations = new Set(
+      generatedVariations
+        .filter(v => !v.id.startsWith('var-')) // Sadece mevcut varyasyonları kontrol et
+        .map(v => 
+          v.attributes.map(a => `${a.attributeId}:${a.attributeValueId}`).sort().join('|')
+        )
+    )
+    
+    const newVariations = combinations
+      .filter(combo => {
+        const comboKey = combo.map(c => `${c.attributeId}:${c.attributeValueId}`).sort().join('|')
+        return !existingCombinations.has(comboKey)
+      })
+      .map((combination, index) => ({
+        id: `var-${Date.now()}-${index}`,
+        sku: '',
+        price: '',
+        stock: '',
+        attributes: combination.map(c => ({ 
+          attributeId: c.attributeId || '', 
+          attributeValueId: c.attributeValueId || '',
+          tempId: c.tempId,
+          displayName: c.displayName
+        })),
+        displayName: combination.map(c => c.displayName).join(' | ')
+      }))
+
+    // Mevcut varyasyonları koru, yeni olanları ekle
+    setGeneratedVariations(prev => {
+      const existing = prev.filter(v => !v.id.startsWith('var-'))
+      return [...existing, ...newVariations]
+    })
   }
 
-  // Seçili attribute'u kaldırma
-  const removeSelectedAttribute = (attributeId: string) => {
-    setSelectedAttributes(selectedAttributes.filter(sa => sa.attributeId !== attributeId))
-    // Mevcut varyasyonları koru, sadece bu attribute'a ait varyasyonları kaldır
-    if (isQuickMode) {
-      // Hızlı modda: Bu attribute'a ait varyasyonları kaldır
-      setQuickVariations([])
-    } else {
-      // Normal modda: Bu attribute'a ait varyasyonları kaldır
-      setVariations(prev => prev.filter(v => 
-        !v.attributes.some(a => a.attributeId === attributeId)
-      ))
-    }
+  // Varyasyon güncelleme
+  const updateGeneratedVariation = (index: number, field: string, value: string) => {
+    const updated = [...generatedVariations]
+    updated[index] = { ...updated[index], [field]: value }
+    setGeneratedVariations(updated)
   }
+
+  // Varyasyon tipleri veya değerleri değiştiğinde kombinasyonları yeniden oluştur
+  useEffect(() => {
+    if (formData.productType === 'VARIABLE') {
+      generateVariationsFromTypes()
+    }
+  }, [variationTypes, formData.productType])
 
   // Attribute değerlerini seçme/güncelleme
   const updateSelectedAttributeValues = (attributeId: string, valueIds: string[]) => {
@@ -479,42 +594,6 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     setQuickVariations(updated)
   }
 
-  // Toplu ekleme fonksiyonu
-  const [bulkImportText, setBulkImportText] = useState('')
-  const [showBulkImport, setShowBulkImport] = useState(false)
-
-  const handleBulkImport = () => {
-    if (!bulkImportText.trim()) {
-      showNotification('error', 'Lütfen öğrenci isimlerini girin')
-      return
-    }
-
-    // Pipe (|) ile ayır ve temizle
-    const names = bulkImportText
-      .split('|')
-      .map(name => name.trim())
-      .filter(name => name.length > 0)
-
-    if (names.length === 0) {
-      showNotification('error', 'Geçerli öğrenci ismi bulunamadı')
-      return
-    }
-
-    // Mevcut boş satırları temizle, yeni isimleri ekle
-    const existingWithNames = quickVariations.filter(qv => qv.name.trim() !== '')
-    const newVariations = names.map(name => ({
-      id: `quick-${Date.now()}-${Math.random()}`,
-      name: name.trim(),
-      price: '',
-      stock: '1',
-      sku: ''
-    }))
-
-    setQuickVariations([...existingWithNames, ...newVariations])
-    setBulkImportText('')
-    setShowBulkImport(false)
-    showNotification('success', `${names.length} öğrenci başarıyla eklendi`)
-  }
 
 
   // Varyasyon güncelleme
@@ -660,66 +739,118 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log('=== handleSubmit FUNCTION CALLED ===')
-    console.log('Event:', e)
     e.preventDefault()
-    console.log('=== FORM SUBMIT STARTED ===')
-    console.log('Form data:', formData)
-    console.log('Product ID:', productId)
-    console.log('Is quick mode:', isQuickMode)
-    console.log('Quick variations:', quickVariations)
-    console.log('Variations:', variations)
-    console.log('Selected attributes:', selectedAttributes)
-    
     setIsSaving(true)
 
     try {
-      // Hızlı modda quickVariations'ı variations formatına çevir
+      // Varyasyonları hazırla - Yeni basit sistem
       let finalVariations: any[] = []
-      if (isQuickMode && quickVariations.length > 0 && selectedAttributes.length === 1) {
-        const selectedAttr = selectedAttributes[0]
-        const attributeData = availableAttributes.find(a => a.id === selectedAttr.attributeId)
+      
+      if (formData.productType === 'VARIABLE') {
+        // Önce tüm varyasyon tiplerini ve değerlerini veritabanına kaydet/güncelle
+        const attributeValueMap = new Map<string, string>() // tempId -> realId mapping
         
-        finalVariations = quickVariations
-          .filter(qv => qv.name.trim() !== '' && qv.price.trim() !== '')
-          .map(qv => {
-            // Değer ID'sini bul
-            const valueData = attributeData?.values.find(v => v.value === qv.name.trim())
-            if (!valueData) {
-              showNotification('error', `"${qv.name}" değeri bulunamadı. Lütfen özellik değerlerinden seçin.`)
-              return null
+        for (const type of variationTypes) {
+          if (!type.name.trim() || type.values.length === 0) continue
+
+          let attributeId = type.attributeId
+
+          // Attribute yoksa oluştur
+          if (!attributeId) {
+            const token = localStorage.getItem('token')
+            const response = await fetch('/api/attributes', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ name: type.name, type: 'SELECT' })
+            })
+
+            if (response.ok) {
+              const newAttribute = await response.json()
+              attributeId = newAttribute.id
+            } else {
+              throw new Error(`Özellik "${type.name}" oluşturulamadı`)
             }
-            // ID kontrolü: Eğer ID geçici değilse (veritabanından gelen) gönder
-            // Mevcut varyasyonların ID'sini mutlaka gönder
-            const variationId = (qv.id && typeof qv.id === 'string' && !qv.id.startsWith('quick-')) ? qv.id : undefined
-            return {
-              id: variationId, // undefined gönder, API'de kontrol edilecek
-              sku: qv.sku || '',
-              price: qv.price,
-              stock: qv.stock || '1',
-              attributes: [{ attributeId: selectedAttr.attributeId, attributeValueId: valueData.id }]
+          }
+
+          if (!attributeId) continue
+
+          // Değerleri işle
+          for (const val of type.values) {
+            if (!val.value.trim()) continue
+
+            let valueId = val.valueId
+
+            // Value yoksa oluştur
+            if (!valueId) {
+              const token = localStorage.getItem('token')
+              const response = await fetch(`/api/attributes/${attributeId}/values`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ 
+                  value: val.value,
+                  price: val.price ? parseFloat(val.price) : null
+                })
+              })
+
+              if (response.ok) {
+                const newValue = await response.json()
+                valueId = newValue.id
+              } else {
+                throw new Error(`Değer "${val.value}" oluşturulamadı`)
+              }
             }
+
+            if (valueId && val.id) {
+              attributeValueMap.set(val.id, valueId)
+            }
+          }
+        }
+        
+        // Geçerli varyasyonları filtrele ve gerçek ID'lerle eşleştir
+        finalVariations = generatedVariations
+          .filter(v => {
+            const isValid = v.price.trim() !== '' && v.stock.trim() !== ''
+            if (!isValid) {
+              console.log('Filtered out invalid variation:', v)
+            }
+            return isValid
           })
-          .filter(v => v !== null) as any[]
-      } else if (!isQuickMode && variations.length > 0) {
-        // Normal mod - zaten attribute ID'leri var
-        finalVariations = variations
-          .filter(v => v.price.trim() !== '' && v.stock.trim() !== '')
           .map(v => {
             // ID kontrolü: Eğer ID geçici değilse (veritabanından gelen) gönder
-            // Mevcut varyasyonların ID'sini mutlaka gönder
             const variationId = (v.id && typeof v.id === 'string' && !v.id.startsWith('var-')) ? v.id : undefined
+            
             return {
               id: variationId, // undefined gönder, API'de kontrol edilecek
               sku: v.sku || '',
               price: v.price,
               stock: v.stock,
-              attributes: v.attributes.map(attr => ({
-                attributeId: attr.attributeId,
-                attributeValueId: attr.attributeValueId
-              }))
+              attributes: v.attributes.map(attr => {
+                // Eğer tempId varsa ve attributeValueMap'te varsa gerçek ID'yi kullan
+                const realValueId = attr.tempId && attributeValueMap.has(attr.tempId) 
+                  ? attributeValueMap.get(attr.tempId)! 
+                  : attr.attributeValueId
+                
+                return {
+                  attributeId: attr.attributeId,
+                  attributeValueId: realValueId
+                }
+              }).filter(attr => attr.attributeId && attr.attributeValueId) // Geçersiz olanları filtrele
             }
           })
+          .filter(v => v.attributes.length > 0) // En az bir attribute olmalı
+        
+        console.log('Final variations count:', finalVariations.length)
+        console.log('Final variations:', finalVariations)
+        
+        if (finalVariations.length === 0) {
+          throw new Error('Varyasyonlu ürünler için en az bir varyasyon gereklidir. Lütfen varyasyon bilgilerini doldurun.')
+        }
       }
       
       console.log('Final variations to send:', finalVariations)
@@ -1021,254 +1152,102 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   </div>
                   <div className="ml-3">
                     <h3 className="text-sm font-medium text-blue-800">
-                      Varyasyonlu Ürün Bilgisi
+                      Basit Varyasyon Sistemi
                     </h3>
                     <div className="mt-2 text-sm text-blue-700">
-                      <p>Önce nitelikleri tanımlayın, sonra her varyasyon için fiyat ve stok bilgilerini girin.</p>
+                      <p>1. Varyasyon tiplerini ekleyin (örn: Renk, Beden)</p>
+                      <p>2. Her tip için değerleri ekleyin (örn: Kırmızı, Mavi, XL, L)</p>
+                      <p>3. Sistem otomatik olarak tüm kombinasyonları oluşturacak</p>
+                      <p>4. Her kombinasyon için fiyat ve stok bilgilerini girin</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Özellikler Bölümü - Yeni Mantık */}
+              {/* Varyasyon Tipleri Bölümü */}
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">Özellikler</h3>
-                  {availableAttributes.length > 0 && (
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          addSelectedAttribute(e.target.value)
-                          e.target.value = ''
-                        }
-                      }}
-                      className="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors text-sm border-0 cursor-pointer"
-                      defaultValue=""
-                    >
-                      <option value="">+ Özellik Ekle</option>
-                      {availableAttributes
-                        .filter(attr => !selectedAttributes.some(sa => sa.attributeId === attr.id))
-                        .map(attr => (
-                          <option key={attr.id} value={attr.id}>
-                            {attr.name}
-                          </option>
-                        ))}
-                    </select>
-                  )}
+                  <h3 className="text-lg font-medium text-gray-900">Varyasyon Tipleri</h3>
+                  <button
+                    type="button"
+                    onClick={addVariationType}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+                  >
+                    <span>+</span>
+                    Yeni Tip Ekle
+                  </button>
                 </div>
-                
-                {selectedAttributes.length === 0 ? (
+
+                {variationTypes.length === 0 ? (
                   <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-300 rounded-lg">
-                    <p className="mb-2">Henüz özellik seçilmedi.</p>
-                    <p className="text-sm">Yukarıdaki dropdown'dan özellik seçin.</p>
+                    <p className="mb-2">Henüz varyasyon tipi eklenmedi.</p>
+                    <p className="text-sm">Yukarıdaki butona tıklayarak varyasyon tipi ekleyin (örn: Renk, Beden).</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {selectedAttributes.map((selectedAttr) => {
-                      const attributeData = availableAttributes.find(a => a.id === selectedAttr.attributeId)
-                      return (
-                        <div key={selectedAttr.attributeId} className="border rounded-lg p-4 bg-gray-50">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-lg font-medium text-gray-900">
-                              {selectedAttr.attributeName}
-                            </h4>
+                    {variationTypes.map((type) => (
+                      <div key={type.id} className="border rounded-lg p-4 bg-gray-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <input
+                            type="text"
+                            value={type.name}
+                            onChange={(e) => updateVariationTypeName(type.id, e.target.value)}
+                            placeholder="Varyasyon tipi adı (örn: Renk, Beden)"
+                            className="text-lg font-medium text-gray-900 border-0 bg-transparent focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 flex-1"
+                            onBlur={generateVariationsFromTypes}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeVariationType(type.id)}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium ml-2"
+                          >
+                            Tipi Kaldır
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Değerler:
+                            </label>
                             <button
                               type="button"
-                              onClick={() => removeSelectedAttribute(selectedAttr.attributeId)}
-                              className="text-red-600 hover:text-red-800 text-sm font-medium"
+                              onClick={() => addValueToVariationType(type.id)}
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                             >
-                              Özelliği Kaldır
+                              + Değer Ekle
                             </button>
                           </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Değerleri Seçin (Birden fazla seçebilirsiniz)
-                            </label>
-                            
-                            {/* Yeni Değer Ekleme */}
-                            <div className="mb-3 flex items-center gap-2">
-                              <input
-                                type="text"
-                                placeholder="Yeni değer ekle..."
-                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                id={`new-value-input-${selectedAttr.attributeId}`}
-                              />
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="Fiyat (₺)"
-                                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                id={`new-price-input-${selectedAttr.attributeId}`}
-                              />
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  const valueInput = document.getElementById(`new-value-input-${selectedAttr.attributeId}`) as HTMLInputElement
-                                  const priceInput = document.getElementById(`new-price-input-${selectedAttr.attributeId}`) as HTMLInputElement
-                                  const newValue = valueInput.value.trim()
-                                  const newPrice = priceInput.value.trim()
-                                  
-                                  if (newValue) {
-                                    try {
-                                      const token = localStorage.getItem('token')
-                                      const response = await fetch(`/api/attributes/${selectedAttr.attributeId}/values`, {
-                                        method: 'POST',
-                                        headers: {
-                                          'Content-Type': 'application/json',
-                                          'Authorization': `Bearer ${token}`
-                                        },
-                                        body: JSON.stringify({ 
-                                          value: newValue,
-                                          price: newPrice || null
-                                        })
-                                      })
-                                      
-                                      if (response.ok) {
-                                        const newAttributeValue = await response.json()
-                                        // Yeni değeri seçili değerlere ekle
-                                        updateSelectedAttributeValues(
-                                          selectedAttr.attributeId,
-                                          [...selectedAttr.selectedValues, newAttributeValue.id]
-                                        )
-                                        // Attribute listesini yenile
-                                        const attributesRes = await fetch('/api/attributes', {
-                                          headers: {
-                                            'Authorization': `Bearer ${token}`
-                                          }
-                                        })
-                                        if (attributesRes.ok) {
-                                          const updatedAttributes = await attributesRes.json()
-                                          setAvailableAttributes(updatedAttributes)
-                                        }
-                                        valueInput.value = ''
-                                        priceInput.value = ''
-                                        showNotification('success', `"${newValue}" değeri eklendi ve seçildi`)
-                                      } else {
-                                        const error = await response.json()
-                                        showNotification('error', error.error || 'Değer eklenirken bir hata oluştu')
-                                      }
-                                    } catch (error) {
-                                      console.error('Error adding value:', error)
-                                      showNotification('error', 'Değer eklenirken bir hata oluştu')
-                                    }
-                                  }
-                                }}
-                                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                              >
-                                + Ekle
-                              </button>
-                            </div>
-                            
+
+                          {type.values.length === 0 ? (
+                            <p className="text-sm text-amber-600">
+                              ⚠ Lütfen en az bir değer ekleyin
+                            </p>
+                          ) : (
                             <div className="space-y-2">
-                              {attributeData?.values.map((value) => (
-                                <div key={value.id} className="flex items-center space-x-2 hover:bg-gray-100 p-2 rounded">
-                                  <label className="flex items-center space-x-2 cursor-pointer flex-1">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedAttr.selectedValues.includes(value.id)}
-                                      onChange={(e) => {
-                                        const currentValues = selectedAttr.selectedValues
-                                        const newValues = e.target.checked
-                                          ? [...currentValues, value.id]
-                                          : currentValues.filter(id => id !== value.id)
-                                        updateSelectedAttributeValues(selectedAttr.attributeId, newValues)
-                                      }}
-                                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    />
-                                    <span className="text-sm text-gray-700">{value.value}</span>
-                                  </label>
+                              {type.values.map((val) => (
+                                <div key={val.id} className="flex items-center gap-2 bg-white p-2 rounded border">
+                                  <input
+                                    type="text"
+                                    value={val.value}
+                                    onChange={(e) => updateVariationTypeValue(type.id, val.id, 'value', e.target.value)}
+                                    placeholder="Değer adı (örn: Kırmızı, XL)"
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                    onBlur={generateVariationsFromTypes}
+                                  />
                                   <input
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    placeholder="Fiyat (₺)"
-                                    defaultValue={value.price ? value.price.toString() : ''}
-                                    onBlur={async (e) => {
-                                      const newPrice = e.target.value.trim()
-                                      const currentPrice = value.price ? value.price.toString() : ''
-                                      
-                                      // Sadece değişiklik varsa güncelle
-                                      if (newPrice === currentPrice) {
-                                        return
-                                      }
-                                      
-                                      try {
-                                        const token = localStorage.getItem('token')
-                                        const response = await fetch(`/api/attributes/${selectedAttr.attributeId}/values/${value.id}`, {
-                                          method: 'PUT',
-                                          headers: {
-                                            'Content-Type': 'application/json',
-                                            'Authorization': `Bearer ${token}`
-                                          },
-                                          body: JSON.stringify({ price: newPrice || null })
-                                        })
-                                        
-                                        if (response.ok) {
-                                          // Attribute listesini yenile
-                                          const attributesRes = await fetch('/api/attributes', {
-                                            headers: {
-                                              'Authorization': `Bearer ${token}`
-                                            }
-                                          })
-                                          if (attributesRes.ok) {
-                                            const updatedAttributes = await attributesRes.json()
-                                            setAvailableAttributes(updatedAttributes)
-                                          }
-                                        }
-                                      } catch (error) {
-                                        console.error('Error updating price:', error)
-                                      }
-                                    }}
-                                    className="w-28 px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                    value={val.price}
+                                    onChange={(e) => updateVariationTypeValue(type.id, val.id, 'price', e.target.value)}
+                                    placeholder="Ek fiyat (₺)"
+                                    className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                                   />
                                   <button
                                     type="button"
-                                    onClick={async () => {
-                                      if (!confirm(`"${value.value}" değerini silmek istediğinize emin misiniz?`)) {
-                                        return
-                                      }
-                                      
-                                      try {
-                                        const token = localStorage.getItem('token')
-                                        const response = await fetch(`/api/attributes/${selectedAttr.attributeId}/values/${value.id}`, {
-                                          method: 'DELETE',
-                                          headers: {
-                                            'Authorization': `Bearer ${token}`
-                                          }
-                                        })
-                                        
-                                        if (response.ok) {
-                                          // Seçili değerlerden kaldır
-                                          updateSelectedAttributeValues(
-                                            selectedAttr.attributeId,
-                                            selectedAttr.selectedValues.filter(id => id !== value.id)
-                                          )
-                                          
-                                          // Attribute listesini yenile
-                                          const attributesRes = await fetch('/api/attributes', {
-                                            headers: {
-                                              'Authorization': `Bearer ${token}`
-                                            }
-                                          })
-                                          if (attributesRes.ok) {
-                                            const updatedAttributes = await attributesRes.json()
-                                            setAvailableAttributes(updatedAttributes)
-                                          }
-                                          
-                                          showNotification('success', `"${value.value}" değeri silindi`)
-                                        } else {
-                                          const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen hata' }))
-                                          console.error('Delete error response:', errorData)
-                                          showNotification('error', errorData.error || `Değer silinirken bir hata oluştu (${response.status})`)
-                                        }
-                                      } catch (error) {
-                                        console.error('Error deleting value:', error)
-                                        showNotification('error', `Değer silinirken bir hata oluştu: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`)
-                                      }
-                                    }}
-                                    className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1.5 rounded transition-colors"
+                                    onClick={() => removeValueFromVariationType(type.id, val.id)}
+                                    className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition-colors"
                                     title="Değeri Sil"
                                   >
                                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1278,22 +1257,17 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                                 </div>
                               ))}
                             </div>
-                            {selectedAttr.selectedValues.length === 0 && (
-                              <p className="text-sm text-amber-600 mt-2">
-                                ⚠ Lütfen en az bir değer seçin
-                              </p>
-                            )}
-                          </div>
+                          )}
                         </div>
-                      )
-                    })}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
 
-              {/* Hızlı Ekleme Modu - Tek Nitelikli Varyasyonlar */}
-              {isQuickMode && selectedAttributes.length === 1 && (
-                <div>
+              {/* Otomatik Oluşturulan Varyasyonlar */}
+              {generatedVariations.length > 0 && (
+                <div className="mb-6">
                   <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                     <div className="flex items-start">
                       <div className="flex-shrink-0">
@@ -1303,186 +1277,27 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                       </div>
                       <div className="ml-3">
                         <h3 className="text-sm font-medium text-green-800">
-                          Hızlı Ekleme Modu Aktif
+                          Otomatik Oluşturulan Varyasyonlar
                         </h3>
                         <p className="mt-1 text-sm text-green-700">
-                          Tek özellikli varyasyonlar için hızlı ekleme modu. Her satıra {selectedAttributes[0]?.attributeName || 'özellik'} değeri ve fiyat girin.
+                          {generatedVariations.length} kombinasyon otomatik olarak oluşturuldu. Her biri için fiyat ve stok bilgilerini girin.
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900">
-                      {selectedAttributes[0]?.attributeName || 'Özellik'} Listesi ({quickVariations.length})
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowBulkImport(!showBulkImport)}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                        </svg>
-                        Toplu Ekle
-                      </button>
-                      <button
-                        type="button"
-                        onClick={addQuickVariation}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
-                      >
-                        <span>+</span>
-                        Satır Ekle
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Toplu Ekleme Modal */}
-                  {showBulkImport && (
-                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="mb-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Öğrenci İsimlerini Toplu Ekle (| ile ayırın)
-                        </label>
-                        <textarea
-                          value={bulkImportText}
-                          onChange={(e) => setBulkImportText(e.target.value)}
-                          placeholder="AS** S* AV** | ÖY** N** BE*** | OS*** KABA********* | ..."
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent h-32 text-sm font-mono"
-                          rows={6}
-                        />
-                        <p className="mt-2 text-xs text-gray-600">
-                          💡 Öğrenci isimlerini pipe (|) karakteri ile ayırarak yapıştırın. Örnek: <code className="bg-gray-100 px-1 rounded">İsim 1 | İsim 2 | İsim 3</code>
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={handleBulkImport}
-                          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                        >
-                          Ekle
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowBulkImport(false)
-                            setBulkImportText('')
-                          }}
-                          className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
-                        >
-                          İptal
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                          <tr>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">{selectedAttributes[0]?.attributeName || 'Özellik'} Değeri *</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Fiyat (₺) *</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">Stok</th>
-                            <th className="px-4 py-3 text-left font-semibold text-gray-700">SKU</th>
-                            <th className="px-4 py-3 text-center font-semibold text-gray-700 w-20">İşlem</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {quickVariations.map((qv, index) => (
-                            <tr key={qv.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3">
-                                <select
-                                  value={qv.name}
-                                  onChange={(e) => updateQuickVariation(index, 'name', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  required
-                                >
-                                  <option value="">Seçiniz</option>
-                                  {(() => {
-                                    const attributeData = availableAttributes.find(a => a.id === selectedAttributes[0]?.attributeId)
-                                    return attributeData?.values
-                                      .filter(v => selectedAttributes[0]?.selectedValues.includes(v.id))
-                                      .map(value => (
-                                        <option key={value.id} value={value.value}>
-                                          {value.value}
-                                        </option>
-                                      ))
-                                  })()}
-                                </select>
-                              </td>
-                              <td className="px-4 py-3">
-                                <input
-                                  type="number"
-                                  value={qv.price}
-                                  onChange={(e) => updateQuickVariation(index, 'price', e.target.value)}
-                                  step="0.01"
-                                  min="0"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  placeholder="0.00"
-                                  required
-                                />
-                              </td>
-                              <td className="px-4 py-3">
-                                <input
-                                  type="number"
-                                  value={qv.stock}
-                                  onChange={(e) => updateQuickVariation(index, 'stock', e.target.value)}
-                                  min="0"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  placeholder="1"
-                                />
-                              </td>
-                              <td className="px-4 py-3">
-                                <input
-                                  type="text"
-                                  value={qv.sku}
-                                  onChange={(e) => updateQuickVariation(index, 'sku', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  placeholder="Opsiyonel"
-                                />
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => removeQuickVariation(index)}
-                                  className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition-colors"
-                                  title="Satırı Sil"
-                                >
-                                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Normal Varyasyonlar Bölümü - 2+ Nitelik */}
-              {!isQuickMode && variations.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Varyasyonlar ({variations.length})</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">
+                    Varyasyonlar ({generatedVariations.length})
+                  </h3>
                   <div className="space-y-4">
-                    {variations.map((variation, variationIndex) => (
+                    {generatedVariations.map((variation, index) => (
                       <div key={variation.id} className="border rounded-lg p-4 bg-white">
                         <div className="mb-3">
                           <h4 className="font-medium text-gray-900">
-                            {variation.attributes.map(attr => {
-                              const attrData = availableAttributes.find(a => a.id === attr.attributeId)
-                              const valueData = attrData?.values.find(v => v.id === attr.attributeValueId)
-                              const attrName = selectedAttributes.find(sa => sa.attributeId === attr.attributeId)?.attributeName || 'Özellik'
-                              return `${attrName}: ${valueData?.value || 'N/A'}`
-                            }).join(' | ')}
+                            {variation.displayName}
                           </h4>
                         </div>
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1491,7 +1306,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                             <input
                               type="text"
                               value={variation.sku}
-                              onChange={(e) => updateVariation(variationIndex, 'sku', e.target.value)}
+                              onChange={(e) => updateGeneratedVariation(index, 'sku', e.target.value)}
                               className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
                               placeholder="Varyasyon SKU"
                             />
@@ -1503,7 +1318,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                             <input
                               type="number"
                               value={variation.price}
-                              onChange={(e) => updateVariation(variationIndex, 'price', e.target.value)}
+                              onChange={(e) => updateGeneratedVariation(index, 'price', e.target.value)}
                               step="0.01"
                               min="0"
                               required
@@ -1518,7 +1333,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                             <input
                               type="number"
                               value={variation.stock}
-                              onChange={(e) => updateVariation(variationIndex, 'stock', e.target.value)}
+                              onChange={(e) => updateGeneratedVariation(index, 'stock', e.target.value)}
                               min="0"
                               required
                               className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
@@ -1531,6 +1346,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                   </div>
                 </div>
               )}
+            </div>
+          )}
             </div>
           )}
 
