@@ -25,6 +25,7 @@ interface OrderItem {
     attributes: Array<{
       attributeValue: {
         value: string
+        price?: number | null
         attribute: {
           name: string
         }
@@ -438,17 +439,29 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
                     </div>
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-900">{item.product.name}</h3>
-                      <p className="text-sm text-gray-500">SKU: {item.product.sku}</p>
+                      <p className="text-sm text-gray-500">SKU: {item.variation?.sku || item.product.sku}</p>
                       <p className="text-sm text-gray-500">Adet: {item.quantity}</p>
                       {item.variation && item.variation.attributes && item.variation.attributes.length > 0 && (
-                        <div className="mt-2">
-                          <p className="text-sm font-medium text-gray-700">Seçilen Özellikler:</p>
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            {item.variation.attributes.map((attr, index) => (
-                              <span key={index} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
-                                {attr.attributeValue.attribute.name}: {attr.attributeValue.value}
-                              </span>
-                            ))}
+                        <div className="mt-3 space-y-2">
+                          <p className="text-sm font-medium text-gray-700">Seçilen Seçenekler:</p>
+                          <div className="flex flex-col gap-2">
+                            {item.variation.attributes.map((attr, index) => {
+                              const optionPrice = attr?.attributeValue?.price ? Number(attr.attributeValue.price) : null
+                              const attributeName = attr?.attributeValue?.attribute?.name || ''
+                              const attributeValue = attr?.attributeValue?.value || ''
+                              return (
+                                <div key={index} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100">
+                                  <span className="text-sm font-medium text-blue-900">
+                                    {attributeName}: <span className="font-semibold">{attributeValue}</span>
+                                  </span>
+                                  {optionPrice !== null && optionPrice !== 0 && !isNaN(optionPrice) && (
+                                    <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                                      {optionPrice > 0 ? '+' : ''}₺{Math.abs(optionPrice).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       )}

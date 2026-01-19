@@ -1,0 +1,21 @@
+
+> e-commerce-web-app@0.1.0 build
+> prisma generate && next build --webpack
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.17.1, engine=binary) to ./node_modules/@prisma/client in 155ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+unhandledRejection Error: EPERM: operation not permitted, open '/Users/emreerdem/kitap-odeme-sistemi/node_modules/next/dist/client/components/router-reducer/create-href-from-url.js'
+    at ignore-listed frames {
+  errno: -1,
+  code: 'EPERM',
+  syscall: 'open',
+  path: '/Users/emreerdem/kitap-odeme-sistemi/node_modules/next/dist/client/components/router-reducer/create-href-from-url.js'
+}

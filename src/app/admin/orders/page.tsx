@@ -38,6 +38,17 @@ interface Order {
       name: string
       images: string[]
     }
+    variation?: {
+      attributes: Array<{
+        attributeValue: {
+          value: string
+          price?: number | null
+          attribute: {
+            name: string
+          }
+        }
+      }>
+    }
   }>
   _count?: {
     items: number
@@ -284,6 +295,9 @@ export default function AdminOrdersPage() {
                     </p>
                     <p className="text-xs text-gray-500">
                       {order._count?.items || order.items.length} ürün • ₺{Number(order.finalAmount).toLocaleString('tr-TR')}
+                      {order.items.some(item => item.variation) && (
+                        <span className="ml-1 text-blue-600">• Varyasyonlu</span>
+                      )}
                     </p>
                   </div>
                   <StatusBadge status={order.status} />

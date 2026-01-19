@@ -46,6 +46,7 @@ interface OrderItem {
     attributes: Array<{
       attributeValue: {
         value: string
+        price?: number | null
         attribute: {
           name: string
         }
@@ -373,9 +374,17 @@ export default function AdminCustomerDetailPage({ params }: { params: Promise<{ 
                               {order.items.slice(0, 3).map((item, idx) => (
                                 <span key={idx} className="text-xs text-gray-500">
                                   {item.product.name}
-                                  {item.variation && item.variation.attributes.length > 0 && (
+                                  {item.variation && item.variation.attributes && item.variation.attributes.length > 0 && (
                                     <span className="text-gray-400">
-                                      {' '}({item.variation.attributes.map(attr => attr.attributeValue.value).join(', ')})
+                                      {' '}({item.variation.attributes.map(attr => {
+                                        const optionPrice = attr?.attributeValue?.price ? Number(attr.attributeValue.price) : null
+                                        const attributeName = attr?.attributeValue?.attribute?.name || ''
+                                        const attributeValue = attr?.attributeValue?.value || ''
+                                        const priceText = optionPrice !== null && optionPrice !== 0 && !isNaN(optionPrice)
+                                          ? ` ${optionPrice > 0 ? '+' : ''}₺${Math.abs(optionPrice).toFixed(2)}`
+                                          : ''
+                                        return `${attributeName}: ${attributeValue}${priceText}`
+                                      }).join(', ')})
                                     </span>
                                   )}
                                   {idx < Math.min(order.items.length, 3) - 1 && ','}
