@@ -33,41 +33,48 @@ async function handleCallback(data: Record<string, any>, baseUrl: string) {
     }
 
     if (result.success) {
-        // Ödeme Başarılı - Hızlı redirect için önce siparişi güncelle
-        const order = await prisma.order.update({
+        // Ödeme Başarılı - Maksimum hız için kritik işlemleri önce yap
+        // Sipariş güncellemesini başlat ama await etme (asenkron devam etsin)
+        prisma.order.update({
             where: { id: orderId },
             data: {
                 paymentStatus: 'COMPLETED',
                 status: 'CONFIRMED',
                 notes: `Ziraat POS Onaylandı. AuthCode: ${data.AuthCode}, TransId: ${data.TransId}`
             },
-            include: { user: true }
-        })
-
-        // Ödeme kaydı ve e-posta gönderimini asenkron yap (redirect'i bekletme)
-        Promise.all([
-            // Ödeme kaydı
-            prisma.payment.create({
-                data: {
-                    orderId: order.id,
-                    amount: Number(data.amount || 0),
-                    method: 'CREDIT_CARD',
-                    status: 'COMPLETED',
-                    transactionId: data.TransId || `TX-${Date.now()}`,
-                    gatewayResponse: JSON.stringify(data)
-                }
-            }).catch((e) => {
-                console.warn('Payment record creation failed (likely duplicate):', e)
-            }),
-            // E-posta gönderimi
-            emailService.sendOrderStatusUpdate(order, order.user.email, 'CONFIRMED').catch((e) => {
-                console.error('Email send error:', e)
+            select: { id: true, user: { select: { email: true } } } // Sadece gerekli alanları seç
+        }).then((order) => {
+            // Ödeme kaydı ve e-posta gönderimini arka planda yap
+            Promise.all([
+                // Ödeme kaydı
+                prisma.payment.create({
+                    data: {
+                        orderId: order.id,
+                        amount: Number(data.amount || 0),
+                        method: 'CREDIT_CARD',
+                        status: 'COMPLETED',
+                        transactionId: data.TransId || `TX-${Date.now()}`,
+                        gatewayResponse: JSON.stringify(data)
+                    }
+                }).catch((e) => {
+                    console.warn('Payment record creation failed (likely duplicate):', e)
+                }),
+                // E-posta gönderimi - tamamen asenkron
+                emailService.sendOrderStatusUpdate(
+                    { id: order.id, user: order.user } as any, 
+                    order.user.email, 
+                    'CONFIRMED'
+                ).catch((e) => {
+                    console.error('Email send error:', e)
+                })
+            ]).catch((e) => {
+                console.error('Background tasks error:', e)
             })
-        ]).catch((e) => {
-            console.error('Background tasks error:', e)
+        }).catch((e) => {
+            console.error('Order update error:', e)
         })
 
-        // Hemen redirect yap (bekleme süresini kısalt)
+        // Hemen redirect yap - hiçbir işlemi beklemeyiz (tümü asenkron)
         return {
             success: true,
             redirectUrl: `${baseUrl}/payment/success?orderId=${orderId}`
@@ -116,11 +123,19 @@ export async function POST(request: NextRequest) {
         })
 
         const result = await handleCallback(data, baseUrl)
-        return NextResponse.redirect(result.redirectUrl, 303) // 303 See Other
+        // 303 See Other - hızlı redirect için
+        const response = NextResponse.redirect(result.redirectUrl, 303)
+        // Cache header'ları ekle - redirect'i hızlandır
+        response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+        response.headers.set('Pragma', 'no-cache')
+        response.headers.set('Expires', '0')
+        return response
     } catch (error) {
         console.error('Ziraat POST Callback Error:', error)
         const baseUrl = getBaseUrl(request)
-        return NextResponse.redirect(`${baseUrl}/payment/fail?error=SistemHatasi`)
+        const response = NextResponse.redirect(`${baseUrl}/payment/fail?error=SistemHatasi`, 303)
+        response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+        return response
     }
 }
 
@@ -134,10 +149,18 @@ export async function GET(request: NextRequest) {
         })
 
         const result = await handleCallback(data, baseUrl)
-        return NextResponse.redirect(result.redirectUrl, 303)
+        // 303 See Other - hızlı redirect için
+        const response = NextResponse.redirect(result.redirectUrl, 303)
+        // Cache header'ları ekle - redirect'i hızlandır
+        response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+        response.headers.set('Pragma', 'no-cache')
+        response.headers.set('Expires', '0')
+        return response
     } catch (error) {
         console.error('Ziraat GET Callback Error:', error)
         const baseUrl = getBaseUrl(request)
-        return NextResponse.redirect(`${baseUrl}/payment/fail?error=SistemHatasi`)
+        const response = NextResponse.redirect(`${baseUrl}/payment/fail?error=SistemHatasi`, 303)
+        response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
+        return response
     }
 }
