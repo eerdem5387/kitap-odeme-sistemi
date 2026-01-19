@@ -54,8 +54,10 @@ export async function GET(request: NextRequest) {
         }, {} as Record<string, any>)
 
         const res = NextResponse.json(groupedSettings)
-        // CDN cache: 5 dakika, SWR 1 gün
-        res.headers.set('Cache-Control', 's-maxage=300, stale-while-revalidate=86400')
+        // Cache'i devre dışı bırak - ayarlar her zaman güncel olmalı
+        res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+        res.headers.set('Pragma', 'no-cache')
+        res.headers.set('Expires', '0')
         return res
     } catch (error) {
         return NextResponse.json({ error: 'Ayarlar getirilirken bir hata oluştu' }, { status: 500 })
@@ -67,10 +69,14 @@ export async function PUT(request: NextRequest) {
         const body = await request.json()
         const { settings } = updateSettingsSchema.parse(body)
 
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Updating settings:', settings.length, 'items')
+        }
+
         // Mevcut ayarları güncelle veya yeni ayar ekle
         const results = await Promise.all(
             settings.map(async (setting) => {
-                return await prisma.settings.upsert({
+                const result = await prisma.settings.upsert({
                     where: { key: setting.key },
                     update: {
                         value: setting.value,
@@ -84,13 +90,26 @@ export async function PUT(request: NextRequest) {
                         category: setting.category || 'general'
                     }
                 })
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`Upserted setting: ${setting.key} = ${setting.value}`)
+                }
+                return result
             })
         )
 
-        return NextResponse.json({
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Settings updated successfully:', results.length, 'items')
+        }
+
+        const res = NextResponse.json({
             message: 'Ayarlar başarıyla güncellendi',
             updatedCount: results.length
         })
+        // Cache'i devre dışı bırak
+        res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+        res.headers.set('Pragma', 'no-cache')
+        res.headers.set('Expires', '0')
+        return res
     } catch (error) {
         if (error instanceof z.ZodError) {
             return NextResponse.json({ error: 'Geçersiz veri formatı', details: (error as any).issues }, { status: 400 })

@@ -20,7 +20,19 @@ const createProductSchema = z.object({
     variations: z.array(z.object({
         sku: z.string().optional(),
         price: z.string().min(1, 'Fiyat gereklidir'),
-        stock: z.string().min(1, 'Stok gereklidir'),
+        stock: z.union([
+            z.string().min(1, 'Stok gereklidir'),
+            z.number().int().min(-1, 'Stok -1 (sınırsız) veya 0+ olmalıdır')
+        ]).refine((val) => {
+            // String ise "-1" veya pozitif sayı olmalı
+            if (typeof val === 'string') {
+                return val === '-1' || (!isNaN(parseInt(val)) && parseInt(val) >= 0)
+            }
+            // Number ise -1 veya pozitif olmalı
+            return val === -1 || val >= 0
+        }, {
+            message: 'Stok -1 (sınırsız) veya 0+ olmalıdır'
+        }),
         attributes: z.array(z.object({
             // Yeni format (öncelikli)
             attributeId: z.string().optional(),
@@ -286,13 +298,18 @@ export async function POST(request: NextRequest) {
         // Eğer varyasyonlu ürünse varyasyonları ekle
         if (productData.productType === 'VARIABLE' && productVariations && productVariations.length > 0) {
             for (const variationData of productVariations) {
+                // Stock değerini kontrol et: string olarak "-1" gelebilir veya number olarak -1
+                const stockValue = typeof variationData.stock === 'string' 
+                    ? (variationData.stock === '-1' || variationData.stock.trim() === '-1' ? -1 : parseInt(variationData.stock || '0'))
+                    : (variationData.stock === -1 ? -1 : parseInt(variationData.stock?.toString() || '0'))
+                
                 // Önce varyasyonu oluştur
                 const variation = await prisma.productVariation.create({
                     data: {
                         productId: product.id,
                         sku: variationData.sku || undefined,
                         price: parseFloat(variationData.price),
-                        stock: parseInt(variationData.stock)
+                        stock: stockValue
                     }
                 })
 

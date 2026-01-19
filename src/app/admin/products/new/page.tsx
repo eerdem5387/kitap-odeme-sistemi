@@ -371,7 +371,7 @@ export default function NewProductPage() {
             return {
               sku: v.sku || '',
               price: v.price,
-              stock: v.isUnlimitedStock ? -1 : parseInt(v.stock) || 0,
+              stock: v.isUnlimitedStock ? '-1' : (v.stock || '0'),
               attributes: mappedAttributes
             }
           })
@@ -1001,37 +1001,46 @@ export default function NewProductPage() {
                               Stok *
                             </label>
                             <div className="space-y-2">
-                              <div className="flex items-center gap-2">
+                              <label 
+                                htmlFor={`unlimited-stock-new-${index}`}
+                                className="flex items-center gap-2 cursor-pointer select-none"
+                                style={{ userSelect: 'none' }}
+                                onClick={(e) => {
+                                  // Label'a tıklandığında checkbox'ı toggle et
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  const newValue = !variation.isUnlimitedStock
+                                  updateGeneratedVariation(index, 'isUnlimitedStock', newValue)
+                                  if (newValue) {
+                                    updateGeneratedVariation(index, 'stock', '')
+                                  }
+                                }}
+                              >
                                 <input
                                   type="checkbox"
                                   id={`unlimited-stock-new-${index}`}
                                   checked={variation.isUnlimitedStock || false}
                                   onChange={(e) => {
+                                    e.stopPropagation()
                                     const newValue = e.target.checked
-                                    console.log('Checkbox changed:', newValue, 'for variation:', index)
                                     updateGeneratedVariation(index, 'isUnlimitedStock', newValue)
                                     if (newValue) {
                                       updateGeneratedVariation(index, 'stock', '')
                                     }
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                  }}
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation()
                                   }}
                                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                                  style={{ pointerEvents: 'auto', flexShrink: 0, zIndex: 10, position: 'relative' }}
                                 />
-                                <label 
-                                  htmlFor={`unlimited-stock-new-${index}`}
-                                  className="text-sm text-gray-700 cursor-pointer select-none"
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    const newValue = !variation.isUnlimitedStock
-                                    console.log('Label clicked, toggling to:', newValue)
-                                    updateGeneratedVariation(index, 'isUnlimitedStock', newValue)
-                                    if (newValue) {
-                                      updateGeneratedVariation(index, 'stock', '')
-                                    }
-                                  }}
-                                >
+                                <span className="text-sm text-gray-700">
                                   Sınırsız stok (Stokta gösterilecek)
-                                </label>
-                              </div>
+                                </span>
+                              </label>
                               {!variation.isUnlimitedStock && (
                                 <input
                                   type="number"

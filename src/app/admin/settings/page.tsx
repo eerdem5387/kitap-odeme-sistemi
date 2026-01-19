@@ -41,9 +41,9 @@ interface SettingsData {
     ziraatTestMode?: boolean
   }
   shipping?: {
-    freeShippingThreshold?: number
-    defaultShippingCost?: number
-    maxShippingDays?: number
+    freeShippingThreshold?: number | undefined
+    defaultShippingCost?: number | undefined
+    maxShippingDays?: number | undefined
     allowPickup?: boolean
   }
   security?: {
@@ -69,7 +69,14 @@ export default function AdminSettingsPage() {
       setError(null)
       setIsLoading(true)
       
-      const response = await fetch('/api/settings')
+      // Cache bypass için timestamp ekle
+      const response = await fetch(`/api/settings?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
       if (!response.ok) {
         throw new Error('Ayarlar yüklenirken bir hata oluştu')
       }
@@ -235,24 +242,30 @@ export default function AdminSettingsPage() {
       // Kargo ayarları
       if (settings.shipping) {
         Object.entries(settings.shipping).forEach(([key, value]) => {
-          flatSettings.push({
-            key: `shipping.${key}`,
-            value: String(value),
-            type: typeof value === 'boolean' ? 'boolean' : 'number',
-            category: 'shipping'
-          })
+          // undefined veya null değerleri atla
+          if (value !== undefined && value !== null) {
+            flatSettings.push({
+              key: `shipping.${key}`,
+              value: String(value),
+              type: typeof value === 'boolean' ? 'boolean' : 'number',
+              category: 'shipping'
+            })
+          }
         })
       }
 
       // Güvenlik ayarları
       if (settings.security) {
         Object.entries(settings.security).forEach(([key, value]) => {
-          flatSettings.push({
-            key: `security.${key}`,
-            value: String(value),
-            type: typeof value === 'boolean' ? 'boolean' : 'number',
-            category: 'security'
-          })
+          // undefined veya null değerleri atla
+          if (value !== undefined && value !== null) {
+            flatSettings.push({
+              key: `security.${key}`,
+              value: String(value),
+              type: typeof value === 'boolean' ? 'boolean' : 'number',
+              category: 'security'
+            })
+          }
         })
       }
 
@@ -271,6 +284,8 @@ export default function AdminSettingsPage() {
         throw new Error(errorData.error || 'Ayarlar kaydedilirken bir hata oluştu')
       }
 
+      // Ayarları yeniden yükle
+      await fetchSettings()
       alert('Ayarlar başarıyla kaydedildi!')
     } catch (error) {
       console.error('Error saving settings:', error)
@@ -556,6 +571,45 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
 
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-md font-medium text-gray-900">PayPal</h4>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.payment?.paypalEnabled || false}
+                      onChange={(e) => updateSetting('payment', 'paypalEnabled', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Client ID
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.payment?.paypalClientId || ''}
+                      onChange={(e) => updateSetting('payment', 'paypalClientId', e.target.value)}
+                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Secret
+                    </label>
+                    <input
+                      type="password"
+                      value={settings.payment?.paypalSecret || ''}
+                      onChange={(e) => updateSetting('payment', 'paypalSecret', e.target.value)}
+                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="border rounded-lg p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <h4 className="text-base sm:text-lg font-medium text-gray-900">Ziraat POS (3D Pay Hosting)</h4>
@@ -675,6 +729,17 @@ export default function AdminSettingsPage() {
                     />
                   </div>
                 </div>
+                <div className="mt-4">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.payment?.ziraatTestMode || false}
+                      onChange={(e) => updateSetting('payment', 'ziraatTestMode', e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Test Modu (Test ortamı için)</span>
+                  </label>
+                </div>
                 <div className="mt-4 sm:mt-6 space-y-2 sm:space-y-0 sm:flex sm:gap-2">
                   <button
                     onClick={handleTestZiraat}
@@ -706,8 +771,8 @@ export default function AdminSettingsPage() {
                 </label>
                 <input
                   type="number"
-                  value={settings.shipping?.freeShippingThreshold || 0}
-                  onChange={(e) => updateSetting('shipping', 'freeShippingThreshold', Number(e.target.value))}
+                  value={settings.shipping?.freeShippingThreshold ?? ''}
+                  onChange={(e) => updateSetting('shipping', 'freeShippingThreshold', e.target.value === '' ? undefined : Number(e.target.value))}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
                 />
               </div>
@@ -718,8 +783,8 @@ export default function AdminSettingsPage() {
                 <input
                   type="number"
                   step="0.01"
-                  value={settings.shipping?.defaultShippingCost || 0}
-                  onChange={(e) => updateSetting('shipping', 'defaultShippingCost', Number(e.target.value))}
+                  value={settings.shipping?.defaultShippingCost ?? ''}
+                  onChange={(e) => updateSetting('shipping', 'defaultShippingCost', e.target.value === '' ? undefined : Number(e.target.value))}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
                 />
               </div>
@@ -729,8 +794,8 @@ export default function AdminSettingsPage() {
                 </label>
                 <input
                   type="number"
-                  value={settings.shipping?.maxShippingDays || 0}
-                  onChange={(e) => updateSetting('shipping', 'maxShippingDays', Number(e.target.value))}
+                  value={settings.shipping?.maxShippingDays ?? ''}
+                  onChange={(e) => updateSetting('shipping', 'maxShippingDays', e.target.value === '' ? undefined : Number(e.target.value))}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent touch-manipulation text-base"
                 />
               </div>
