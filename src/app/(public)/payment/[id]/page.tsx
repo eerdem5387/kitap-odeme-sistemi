@@ -48,6 +48,7 @@ export default function PaymentPage() {
   const [expiryMonth, setExpiryMonth] = useState('')
   const [expiryYear, setExpiryYear] = useState('')
   const [cvv, setCvv] = useState('')
+  const [installments, setInstallments] = useState<'1' | '2'>('1')
 
   // Provider'ı env'den al, yoksa default ziraat olsun (gerçek projede)
   const provider = process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || 'ziraat'
@@ -96,8 +97,8 @@ export default function PaymentPage() {
         amount: order?.finalAmount ? Number(order.finalAmount) : 0,
         method: 'CREDIT_CARD',
         guestEmail: !token ? guestEmail : undefined,
+        installments: installments === '2' ? '2' : undefined,
         // Kart bilgilerini Ziraat Hosting modelinde göndermiyoruz, banka sayfasında girilecek.
-        // Eğer API modeline geçilirse burada alınır.
       }
 
       const res = await fetch('/api/payment/process', {
@@ -255,6 +256,35 @@ export default function PaymentPage() {
                 <p className="text-sm text-blue-800">
                   Kart bilgilerinizi bankanın güvenli ödeme sayfasında gireceksiniz.
                 </p>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-gray-700">Taksit seçenekleri</p>
+                <div className="flex gap-3">
+                  <label className={`flex-1 flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${installments === '1' ? 'border-green-600 bg-green-50 ring-2 ring-green-200' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="installments"
+                      value="1"
+                      checked={installments === '1'}
+                      onChange={() => setInstallments('1')}
+                      className="sr-only"
+                    />
+                    <span className="text-sm font-medium text-gray-900">Tek çekim</span>
+                  </label>
+                  <label className={`flex-1 flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 cursor-pointer transition-all ${installments === '2' ? 'border-green-600 bg-green-50 ring-2 ring-green-200' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="installments"
+                      value="2"
+                      checked={installments === '2'}
+                      onChange={() => setInstallments('2')}
+                      className="sr-only"
+                    />
+                    <span className="text-sm font-medium text-gray-900">2 Taksit</span>
+                    <span className="text-xs text-green-700 font-medium">Vade farkısız</span>
+                  </label>
+                </div>
               </div>
 
               <button
