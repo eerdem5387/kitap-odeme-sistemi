@@ -209,6 +209,8 @@ model Order {
   shippingAddressId String
   billingAddressId String
   notes         String?
+  guestCustomerEmail String?   // Misafir siparişte sipariş anındaki müşteri e-postası (takip için)
+  guestCustomerName  String?  // Misafir siparişte sipariş anındaki müşteri adı (takip için)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 

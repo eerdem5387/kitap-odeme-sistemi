@@ -27,6 +27,8 @@ interface Order {
   paymentStatus: string
   finalAmount: number
   createdAt: string
+  guestCustomerName?: string | null
+  guestCustomerEmail?: string | null
   user: {
     name: string
     email: string
@@ -113,10 +115,12 @@ export default function AdminOrdersPage() {
     // Search Filter
     if (searchTerm) {
       const lowerTerm = searchTerm.toLowerCase()
-      result = result.filter(order => 
+      const name = (o: Order) => (o.guestCustomerName ?? o.user.name).toLowerCase()
+      const email = (o: Order) => (o.guestCustomerEmail ?? o.user.email).toLowerCase()
+      result = result.filter(order =>
         order.orderNumber.toLowerCase().includes(lowerTerm) ||
-        order.user.name.toLowerCase().includes(lowerTerm) ||
-        order.user.email.toLowerCase().includes(lowerTerm)
+        name(order).includes(lowerTerm) ||
+        email(order).includes(lowerTerm)
       )
     }
 
@@ -236,8 +240,8 @@ export default function AdminOrdersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{order.user.name}</div>
-                      <div className="text-xs text-gray-500">{order.user.email}</div>
+                      <div className="font-medium text-gray-900">{order.guestCustomerName ?? order.user.name}</div>
+                      <div className="text-xs text-gray-500">{order.guestCustomerEmail ?? order.user.email}</div>
                     </td>
                     <td className="px-6 py-4 font-medium text-gray-900">
                       ₺{Number(order.finalAmount).toLocaleString('tr-TR')}
@@ -303,7 +307,7 @@ export default function AdminOrdersPage() {
                   <StatusBadge status={order.status} />
                 </div>
                 <div className="flex justify-between items-center text-xs text-gray-500">
-                  <span>{order.user.name}</span>
+                  <span>{order.guestCustomerName ?? order.user.name}</span>
                   <span>
                     {new Date(order.createdAt).toLocaleDateString('tr-TR')}{' '}
                     {new Date(order.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}

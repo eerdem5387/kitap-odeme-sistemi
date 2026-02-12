@@ -65,6 +65,8 @@ interface Order {
   discountAmount: number
   finalAmount: number
   notes?: string
+  guestCustomerName?: string | null
+  guestCustomerEmail?: string | null
   createdAt: string
   updatedAt: string
   user: {
@@ -409,11 +411,11 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Ad Soyad:</span>
-                  <span className="font-medium">{order.user.name}</span>
+                  <span className="font-medium">{order.guestCustomerName ?? order.user.name}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">E-posta:</span>
-                  <span className="font-medium">{order.user.email}</span>
+                  <span className="font-medium">{order.guestCustomerEmail ?? order.user.email}</span>
                 </div>
               </div>
             </div>

@@ -70,18 +70,20 @@ export default function PaymentSuccessPage() {
         if (!res.ok) throw new Error(data.error || 'Sipariş getirilemedi')
         setOrder(data)
         
-        // Sipariş başarıyla yüklendiğinde ve ödeme tamamlandıysa sepeti temizle
+        // Sipariş başarıyla yüklendiğinde ve ödeme tamamlandıysa sepeti temizle ve misafir verilerini sil
         if (isClient && data.paymentStatus === 'COMPLETED' && !cartClearedRef.current) {
           const clearedOrderId = localStorage.getItem('lastClearedOrderId')
           if (clearedOrderId !== orderId) {
-            console.log('Sepet temizleniyor, sipariş ID:', orderId)
             cartService.clearCart()
             localStorage.setItem('lastClearedOrderId', orderId)
             cartClearedRef.current = true
           } else {
-            console.log('Sepet zaten temizlenmiş, sipariş ID:', orderId)
             cartClearedRef.current = true
           }
+          // Her sipariş sonrası misafir bilgilerini temizle; bir sonraki alışveriş ilk kezmiş gibi olsun
+          localStorage.removeItem('userEmail')
+          localStorage.removeItem('userName')
+          localStorage.removeItem('userPhone')
         }
       } catch (e: any) {
         setError(e?.message || 'Sipariş getirilemedi')
@@ -92,16 +94,18 @@ export default function PaymentSuccessPage() {
     fetchOrder()
   }, [orderId])
 
-  // Ayrı bir useEffect ile sepet temizleme kontrolü (güvenlik için)
+  // Ayrı bir useEffect ile sepet temizleme ve misafir verisi temizleme
   useEffect(() => {
     if (isClient && order && order.paymentStatus === 'COMPLETED' && !cartClearedRef.current) {
       const clearedOrderId = localStorage.getItem('lastClearedOrderId')
       if (clearedOrderId !== orderId) {
-        console.log('Sepet temizleniyor (ikinci kontrol), sipariş ID:', orderId)
         cartService.clearCart()
         localStorage.setItem('lastClearedOrderId', orderId)
         cartClearedRef.current = true
       }
+      localStorage.removeItem('userEmail')
+      localStorage.removeItem('userName')
+      localStorage.removeItem('userPhone')
     }
   }, [order, orderId])
 

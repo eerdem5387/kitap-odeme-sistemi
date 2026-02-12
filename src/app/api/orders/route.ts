@@ -108,12 +108,11 @@ export async function POST(request: NextRequest) {
             const [first, ...rest] = nameParts.split(' ')
             const displayName = nameParts || 'Müşteri'
 
+            // Aynı e-posta farklı kişiler için kullanılsa bile User kaydını güncelleme;
+            // sipariş bazlı müşteri bilgisi guestCustomerEmail/guestCustomerName ile saklanır.
             const upserted = await prisma.user.upsert({
                 where: { email: customerEmail.toLowerCase() },
-                update: {
-                    name: displayName,
-                    phone: customerPhone || shippingAddress.phone
-                },
+                update: {},
                 create: {
                     email: customerEmail.toLowerCase(),
                     password: 'guest',
@@ -225,6 +224,7 @@ export async function POST(request: NextRequest) {
         const shippingAddressRecord = await findOrCreateAddress(shippingAddress)
         const billingAddressRecord = await findOrCreateAddress(finalBillingAddress)
 
+        const isGuestOrder = !userId && !!customerEmail
         const order = await prisma.order.create({
             data: {
                 userId: dbUser.id,
@@ -239,7 +239,11 @@ export async function POST(request: NextRequest) {
                 shippingAddressId: shippingAddressRecord.id,
                 billingAddressId: billingAddressRecord.id,
                 paymentMethod: 'CREDIT_CARD',
-                notes: notes || ''
+                notes: notes || '',
+                ...(isGuestOrder && {
+                    guestCustomerEmail: customerEmail,
+                    guestCustomerName: (customerName || `${shippingAddress.firstName} ${shippingAddress.lastName}`).trim()
+                })
             },
             include: {
                 user: true,

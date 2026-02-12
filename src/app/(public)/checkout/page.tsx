@@ -432,6 +432,8 @@ export default function CheckoutPage() {
                       </div>
                   <input
                     type="email"
+                    name="customerEmail"
+                    autoComplete="off"
                     value={customerEmail}
                     onChange={(e) => setCustomerEmail(e.target.value)}
                     placeholder="ornek@domain.com"
