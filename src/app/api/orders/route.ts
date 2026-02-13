@@ -225,31 +225,48 @@ export async function POST(request: NextRequest) {
         const billingAddressRecord = await findOrCreateAddress(finalBillingAddress)
 
         const isGuestOrder = !userId && !!customerEmail
-        const order = await prisma.order.create({
-            data: {
-                userId: dbUser.id,
-                orderNumber: `ORD-${Date.now()}`,
-                status: 'PENDING',
-                paymentStatus: 'PENDING',
-                totalAmount: subtotal,
-                shippingFee: shippingFee,
-                taxAmount: taxAmount,
-                discountAmount: discountAmount,
-                finalAmount: finalAmount,
-                shippingAddressId: shippingAddressRecord.id,
-                billingAddressId: billingAddressRecord.id,
-                paymentMethod: 'CREDIT_CARD',
-                notes: notes || '',
-                ...(isGuestOrder && {
-                    guestCustomerEmail: customerEmail,
-                    guestCustomerName: (customerName || `${shippingAddress.firstName} ${shippingAddress.lastName}`).trim()
+        const guestData = isGuestOrder ? {
+            guestCustomerEmail: customerEmail,
+            guestCustomerName: (customerName || `${shippingAddress.firstName} ${shippingAddress.lastName}`).trim()
+        } : {}
+        const baseData = {
+            userId: dbUser.id,
+            orderNumber: `ORD-${Date.now()}`,
+            status: 'PENDING',
+            paymentStatus: 'PENDING',
+            totalAmount: subtotal,
+            shippingFee: shippingFee,
+            taxAmount: taxAmount,
+            discountAmount: discountAmount,
+            finalAmount: finalAmount,
+            shippingAddressId: shippingAddressRecord.id,
+            billingAddressId: billingAddressRecord.id,
+            paymentMethod: 'CREDIT_CARD',
+            notes: notes || ''
+        }
+        let order: Awaited<ReturnType<typeof prisma.order.create>>
+        try {
+            order = await prisma.order.create({
+                data: { ...baseData, ...guestData },
+                include: {
+                    user: true,
+                    items: { include: { product: true } }
+                }
+            })
+        } catch (createError: unknown) {
+            const msg = createError instanceof Error ? createError.message : ''
+            if (Object.keys(guestData).length > 0 && (msg.includes('column') || msg.includes('guestCustomer'))) {
+                order = await prisma.order.create({
+                    data: baseData,
+                    include: {
+                        user: true,
+                        items: { include: { product: true } }
+                    }
                 })
-            },
-            include: {
-                user: true,
-                items: { include: { product: true } }
+            } else {
+                throw createError
             }
-        })
+        }
 
         // Sipariş kalemlerini oluştur
         for (const item of items) {

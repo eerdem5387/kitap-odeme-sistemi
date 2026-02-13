@@ -41,45 +41,46 @@ interface Payment {
 export default function AdminPaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  const fetchPayments = async () => {
+    try {
+      setFetchError(null)
+      const token = localStorage.getItem('token')
+      if (!token) {
+        setFetchError('Oturum bulunamadı. Lütfen tekrar giriş yapın.')
+        setPayments([])
+        return
+      }
+
+      const response = await fetch('/api/payments', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        setPayments([])
+        setFetchError(typeof data?.error === 'string' ? data.error : 'Ödemeler yüklenemedi.')
+        return
+      }
+
+      if (Array.isArray(data)) {
+        setPayments(data)
+      } else {
+        setPayments([])
+        setFetchError('Geçersiz yanıt formatı.')
+      }
+    } catch (error) {
+      console.error('Error fetching payments:', error)
+      setPayments([])
+      setFetchError('Ödemeler yüklenirken bir hata oluştu.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchPayments = async () => {
-      try {
-        // Token'ı localStorage'dan al
-        const token = localStorage.getItem('token')
-        if (!token) {
-          console.error('No token found')
-          setPayments([])
-          setIsLoading(false)
-          return
-        }
-
-        const response = await fetch('/api/payments', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          if (Array.isArray(data)) {
-            setPayments(data)
-          } else {
-            console.error('API returned non-array data:', data)
-            setPayments([])
-          }
-        } else {
-          console.error('Failed to fetch payments:', response.status)
-          setPayments([])
-        }
-      } catch (error) {
-        console.error('Error fetching payments:', error)
-        setPayments([])
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
     fetchPayments()
   }, [])
 
@@ -137,6 +138,14 @@ export default function AdminPaymentsPage() {
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Ödemeler</h1>
         <p className="text-sm sm:text-base text-gray-600">Tüm ödeme işlemlerini görüntüleyin ve yönetin</p>
       </div>
+
+      {fetchError && (
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertCircle className="h-5 w-5 flex-shrink-0" />
+          <span>{fetchError}</span>
+          <button type="button" onClick={() => { setIsLoading(true); fetchPayments(); }} className="ml-auto text-sm font-medium underline">Tekrar dene</button>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">

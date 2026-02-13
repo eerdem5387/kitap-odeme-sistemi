@@ -1,29 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { verifyToken } from '@/lib/auth'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
+        const authHeader = request.headers.get('authorization')
+        if (!authHeader?.startsWith('Bearer ')) {
+            return NextResponse.json({ error: 'Yetkilendirme gerekli' }, { status: 401 })
+        }
+        const decoded = verifyToken(authHeader.slice(7))
+        if (!decoded || decoded.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Admin yetkisi gerekli' }, { status: 403 })
+        }
+
+        // order için sadece gerekli alanlar; yeni kolonlar (guestCustomer*) seçilmez, migration yoksa 500 önlenir
         const payments = await prisma.payment.findMany({
             include: {
                 order: {
-                    include: {
+                    select: {
+                        orderNumber: true,
                         user: {
                             select: { name: true, email: true }
                         },
                         items: {
                             include: {
-                                product: {
-                                    select: { name: true }
-                                },
+                                product: { select: { name: true } },
                                 variation: {
                                     include: {
                                         attributes: {
                                             include: {
                                                 attributeValue: {
                                                     include: {
-                                                        attribute: {
-                                                            select: { name: true }
-                                                        }
+                                                        attribute: { select: { name: true } }
                                                     }
                                                 }
                                             }
@@ -71,8 +79,11 @@ export async function GET() {
         return NextResponse.json(formattedPayments)
     } catch (error) {
         console.error('Error fetching payments:', error)
+        const message = error instanceof Error && error.message?.includes('column')
+            ? 'Ödemeler getirilemedi. Veritabanı güncellemesi gerekebilir (migration çalıştırın).'
+            : 'Ödemeler getirilemedi'
         return NextResponse.json(
-            { error: 'Ödemeler getirilemedi' },
+            { error: message },
             { status: 500 }
         )
     }

@@ -29,10 +29,10 @@ interface Order {
   createdAt: string
   guestCustomerName?: string | null
   guestCustomerEmail?: string | null
-  user: {
+  user?: {
     name: string
     email: string
-  }
+  } | null
   items: Array<{
     id: string
     quantity: number
@@ -74,30 +74,45 @@ export default function AdminOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   // Fetch Orders
-    const fetchOrders = async () => {
-      try {
+  const fetchOrders = async () => {
+    try {
       setIsLoading(true)
-        const token = localStorage.getItem('token')
-      if (!token) return
-
-        const response = await fetch('/api/admin/orders', {
-        headers: { 'Authorization': `Bearer ${token}` }
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          if (Array.isArray(data)) {
-            setOrders(data)
-        }
-        }
-      } catch (error) {
-      console.error('Error:', error)
-      } finally {
-        setIsLoading(false)
+      setFetchError(null)
+      const token = localStorage.getItem('token')
+      if (!token) {
+        setFetchError('Oturum bulunamadı. Lütfen tekrar giriş yapın.')
+        return
       }
+
+      const response = await fetch('/api/admin/orders', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        setOrders([])
+        setFetchError(typeof data?.error === 'string' ? data.error : 'Siparişler yüklenemedi.')
+        return
+      }
+
+      if (Array.isArray(data)) {
+        setOrders(data)
+      } else {
+        setOrders([])
+        setFetchError('Geçersiz yanıt formatı.')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setOrders([])
+      setFetchError('Siparişler yüklenirken bir hata oluştu.')
+    } finally {
+      setIsLoading(false)
     }
+  }
 
   useEffect(() => {
     fetchOrders()
@@ -115,8 +130,8 @@ export default function AdminOrdersPage() {
     // Search Filter
     if (searchTerm) {
       const lowerTerm = searchTerm.toLowerCase()
-      const name = (o: Order) => (o.guestCustomerName ?? o.user.name).toLowerCase()
-      const email = (o: Order) => (o.guestCustomerEmail ?? o.user.email).toLowerCase()
+      const name = (o: Order) => (o.guestCustomerName ?? o.user?.name ?? '').toLowerCase()
+      const email = (o: Order) => (o.guestCustomerEmail ?? o.user?.email ?? '').toLowerCase()
       result = result.filter(order =>
         order.orderNumber.toLowerCase().includes(lowerTerm) ||
         name(order).includes(lowerTerm) ||
@@ -176,6 +191,14 @@ export default function AdminOrdersPage() {
           <p className="text-gray-500 mt-1">Toplam {filteredOrders.length} sipariş</p>
         </div>
       </div>
+
+      {fetchError && (
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-center gap-2">
+          <AlertCircle className="h-5 w-5 flex-shrink-0" />
+          <span>{fetchError}</span>
+          <button type="button" onClick={() => fetchOrders()} className="ml-auto text-sm font-medium underline">Tekrar dene</button>
+        </div>
+      )}
 
       {/* Controls */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-4">
@@ -240,8 +263,8 @@ export default function AdminOrdersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{order.guestCustomerName ?? order.user.name}</div>
-                      <div className="text-xs text-gray-500">{order.guestCustomerEmail ?? order.user.email}</div>
+                      <div className="font-medium text-gray-900">{order.guestCustomerName ?? order.user?.name ?? '—'}</div>
+                      <div className="text-xs text-gray-500">{order.guestCustomerEmail ?? order.user?.email ?? '—'}</div>
                     </td>
                     <td className="px-6 py-4 font-medium text-gray-900">
                       ₺{Number(order.finalAmount).toLocaleString('tr-TR')}
@@ -307,7 +330,7 @@ export default function AdminOrdersPage() {
                   <StatusBadge status={order.status} />
                 </div>
                 <div className="flex justify-between items-center text-xs text-gray-500">
-                  <span>{order.guestCustomerName ?? order.user.name}</span>
+                  <span>{order.guestCustomerName ?? order.user?.name ?? '—'}</span>
                   <span>
                     {new Date(order.createdAt).toLocaleDateString('tr-TR')}{' '}
                     {new Date(order.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}

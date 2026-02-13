@@ -46,24 +46,34 @@ export async function GET(
             )
         }
 
-        // Siparişi getir
+        // Siparişi getir (guestCustomer* kolonları seçilmez; migration yoksa 500 önlenir)
         const order = await prisma.order.findUnique({
             where: { id: resolvedParams.id },
-            include: {
+            select: {
+                id: true,
+                orderNumber: true,
+                userId: true,
+                status: true,
+                totalAmount: true,
+                shippingFee: true,
+                taxAmount: true,
+                discountAmount: true,
+                finalAmount: true,
+                paymentMethod: true,
+                paymentStatus: true,
+                shippingAddressId: true,
+                billingAddressId: true,
+                notes: true,
+                createdAt: true,
+                updatedAt: true,
                 user: {
-                    select: {
-                        id: true,
-                        name: true,
-                        email: true
-                    }
+                    select: { id: true, name: true, email: true }
                 },
                 items: {
                     include: {
                         product: {
                             include: {
-                                category: {
-                                    select: { id: true, name: true }
-                                }
+                                category: { select: { id: true, name: true } }
                             }
                         },
                         variation: {
@@ -71,9 +81,7 @@ export async function GET(
                                 attributes: {
                                     include: {
                                         attributeValue: {
-                                            include: {
-                                                attribute: true
-                                            }
+                                            include: { attribute: true }
                                         }
                                     }
                                 }
