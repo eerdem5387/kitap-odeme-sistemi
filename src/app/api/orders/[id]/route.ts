@@ -3,6 +3,34 @@ import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
 import { z } from 'zod'
 
+function serializeOrder(order: {
+    totalAmount: unknown
+    shippingFee: unknown
+    taxAmount: unknown
+    discountAmount: unknown
+    finalAmount: unknown
+    createdAt: Date
+    updatedAt: Date
+    items: Array<{ unitPrice: unknown; totalPrice: unknown; [k: string]: unknown }>
+    [k: string]: unknown
+}) {
+    return {
+        ...order,
+        totalAmount: Number(order.totalAmount),
+        shippingFee: Number(order.shippingFee),
+        taxAmount: Number(order.taxAmount),
+        discountAmount: Number(order.discountAmount),
+        finalAmount: Number(order.finalAmount),
+        createdAt: order.createdAt.toISOString(),
+        updatedAt: order.updatedAt.toISOString(),
+        items: order.items.map((item: { unitPrice: unknown; totalPrice: unknown; [k: string]: unknown }) => ({
+            ...item,
+            unitPrice: Number(item.unitPrice),
+            totalPrice: Number(item.totalPrice)
+        }))
+    }
+}
+
 const orderUpdateSchema = z.object({
     status: z.enum(['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']).optional(),
     paymentStatus: z.enum(['PENDING', 'COMPLETED', 'FAILED']).optional(),
@@ -17,6 +45,39 @@ export async function GET(
         const resolvedParams = await params
         const token = request.headers.get('authorization')?.replace('Bearer ', '')
 
+        const orderSelect = {
+            id: true,
+            orderNumber: true,
+            userId: true,
+            status: true,
+            totalAmount: true,
+            shippingFee: true,
+            taxAmount: true,
+            discountAmount: true,
+            finalAmount: true,
+            paymentMethod: true,
+            paymentStatus: true,
+            shippingAddressId: true,
+            billingAddressId: true,
+            notes: true,
+            createdAt: true,
+            updatedAt: true,
+            user: { select: { name: true, email: true } },
+            items: {
+                include: {
+                    product: {
+                        include: { category: { select: { id: true, name: true } } }
+                    },
+                    variation: {
+                        include: { attributes: { include: { attributeValue: true } } }
+                    }
+                }
+            },
+            shippingAddress: true,
+            billingAddress: true,
+            payments: { orderBy: { createdAt: 'desc' } }
+        } as const
+
         if (token) {
             const payload = await verifyToken(token)
             if (!payload) {
@@ -25,55 +86,23 @@ export async function GET(
 
             const order = await prisma.order.findUnique({
                 where: { id: resolvedParams.id },
-                include: {
-                    user: { select: { name: true, email: true } },
-                    items: {
-                        include: {
-                            product: {
-                                include: { category: { select: { id: true, name: true } } }
-                            },
-                            variation: {
-                                include: { attributes: { include: { attributeValue: true } } }
-                            }
-                        }
-                    },
-                    shippingAddress: true,
-                    billingAddress: true,
-                    payments: { orderBy: { createdAt: 'desc' } }
-                }
+                select: orderSelect
             })
 
             if (!order) return NextResponse.json({ error: 'Sipariş bulunamadı' }, { status: 404 })
             if (payload.role !== 'ADMIN' && order.userId !== payload.userId) {
                 return NextResponse.json({ error: 'Bu siparişe erişim izniniz yok' }, { status: 403 })
             }
-            return NextResponse.json(order)
+            return NextResponse.json(serializeOrder(order))
         }
 
-        // Guest access path:
-        // Başta misafir erişimi için email eşleştirmesi planlanmıştı (guest query paramıyla),
-        // ancak ödeme servisinin farklı domainlere yönlendirmesi nedeniyle localStorage'dan email
-        // okunamıyor ve guest parametresi boş kalıyor. Bu da başarı sayfasında 401 hatasına sebep oluyordu.
-        // Order ID'ler yüksek entropili olduğundan (cuid), brute-force ile tahmin edilmesi pratikte mümkün değil.
-        // Bu nedenle, sadece orderId'ye sahip olan kullanıcının siparişi görebilmesi yeterli güvenlik seviyesi
-        // olarak kabul edilip, email eşleştirme zorunluluğu kaldırıldı.
+        // Guest access: orderId ile erişim (guest query param opsiyonel)
         const order = await prisma.order.findUnique({
             where: { id: resolvedParams.id },
-            include: {
-                user: { select: { email: true, name: true } },
-                items: {
-                    include: {
-                        product: true,
-                        variation: { include: { attributes: { include: { attributeValue: true } } } }
-                    }
-                },
-                shippingAddress: true,
-                billingAddress: true,
-                payments: { orderBy: { createdAt: 'desc' } }
-            }
+            select: orderSelect
         })
         if (!order) return NextResponse.json({ error: 'Sipariş bulunamadı' }, { status: 404 })
-        return NextResponse.json(order)
+        return NextResponse.json(serializeOrder(order))
     } catch (error) {
         console.error('Error fetching order:', error)
         return NextResponse.json({ error: 'Sipariş getirilirken bir hata oluştu' }, { status: 500 })
@@ -107,34 +136,41 @@ export async function PUT(
         const order = await prisma.order.update({
             where: { id: resolvedParams.id },
             data: updateData,
-            include: {
-                user: {
-                    select: { name: true, email: true }
-                },
+            select: {
+                id: true,
+                orderNumber: true,
+                userId: true,
+                status: true,
+                totalAmount: true,
+                shippingFee: true,
+                taxAmount: true,
+                discountAmount: true,
+                finalAmount: true,
+                paymentMethod: true,
+                paymentStatus: true,
+                shippingAddressId: true,
+                billingAddressId: true,
+                notes: true,
+                createdAt: true,
+                updatedAt: true,
+                user: { select: { name: true, email: true } },
                 items: {
                     include: {
                         product: {
                             select: { name: true, images: true, sku: true },
                             include: {
-                                category: {
-                                    select: {
-                                        id: true,
-                                        name: true
-                                    }
-                                }
+                                category: { select: { id: true, name: true } }
                             }
                         }
                     }
                 },
                 shippingAddress: true,
                 billingAddress: true,
-                payments: {
-                    orderBy: { createdAt: 'desc' }
-                }
+                payments: { orderBy: { createdAt: 'desc' } }
             }
         })
 
-        return NextResponse.json(order)
+        return NextResponse.json(serializeOrder(order))
     } catch (error) {
         if (error instanceof z.ZodError) {
             return NextResponse.json({ error: 'Geçersiz veri formatı', details: error.issues }, { status: 400 })
