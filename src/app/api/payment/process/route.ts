@@ -34,16 +34,26 @@ export async function POST(request: NextRequest) {
         const body = await request.json()
         const paymentData = paymentSchema.parse(body)
 
-        // Siparişi kontrol et
+        // Siparişi kontrol et (guestCustomer* kolonları seçilmez; migration yoksa 500 önlenir)
         const order = await prisma.order.findUnique({
             where: { id: paymentData.orderId },
-            include: {
-                user: true
+            select: {
+                id: true,
+                orderNumber: true,
+                userId: true,
+                finalAmount: true,
+                paymentStatus: true,
+                user: {
+                    select: { email: true, name: true, phone: true }
+                }
             }
         })
 
         if (!order) {
             return NextResponse.json({ error: 'Sipariş bulunamadı' }, { status: 404 })
+        }
+        if (!order.user) {
+            return NextResponse.json({ error: 'Sipariş müşteri bilgisi bulunamadı' }, { status: 400 })
         }
 
         // Yetki / Sahiplik kontrolü
@@ -87,8 +97,8 @@ export async function POST(request: NextRequest) {
                 failUrl: `${baseUrl}/api/payment/ziraat/callback`,
                 customerEmail: order.user.email,
                 customerName: order.user.name,
-                customerPhone: order.user.phone || '',
-                installments: paymentData.installments
+                customerPhone: order.user.phone ?? '',
+                installments: paymentData.installments ?? undefined
             })
 
             if (!ziraatResponse.success || !ziraatResponse.redirectUrl) {
