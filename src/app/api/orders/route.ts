@@ -6,19 +6,19 @@ import { handleApiError, UnauthorizedError, NotFoundError, ValidationError, requ
 import { z } from 'zod'
 
 const orderItemSchema = z.object({
-    productId: z.string().min(1, 'Ürün ID gerekli'),
-    variationId: z.string().optional(),
-    quantity: z.number().min(1, 'Miktar en az 1 olmalı')
+    productId: z.coerce.string().min(1, 'Ürün ID gerekli'),
+    variationId: z.preprocess((v) => (v === null || v === '' ? undefined : v), z.string().optional()),
+    quantity: z.coerce.number().min(1, 'Miktar en az 1 olmalı')
 })
 
 const addressSchema = z.object({
-    title: z.string().min(1, 'Adres başlığı gerekli'),
-    firstName: z.string().min(1, 'Ad gerekli'),
-    lastName: z.string().min(1, 'Soyad gerekli'),
-    phone: z.string().min(1, 'Telefon gerekli'),
-    city: z.string().min(1, 'Şehir gerekli'),
-    district: z.string().min(1, 'İlçe gerekli'),
-    fullAddress: z.string().min(1, 'Adres gerekli')
+    title: z.string().trim().min(1, 'Adres başlığı gerekli'),
+    firstName: z.string().trim().min(1, 'Ad gerekli'),
+    lastName: z.string().trim().min(1, 'Soyad gerekli'),
+    phone: z.string().trim().min(1, 'Telefon gerekli'),
+    city: z.string().trim().min(1, 'Şehir gerekli'),
+    district: z.string().trim().min(1, 'İlçe gerekli'),
+    fullAddress: z.string().trim().min(1, 'Adres gerekli')
 })
 
 const createOrderSchema = z.object({
@@ -34,27 +34,36 @@ export async function GET(request: NextRequest) {
         const authHeader = request.headers.get('authorization')
         const user = requireAuth(authHeader)
 
-        // Kullanıcıya ait siparişleri getir
+        // Kullanıcıya ait siparişleri getir (guestCustomer* seçilmez; migration yoksa 500 önlenir)
         const orders = await prisma.order.findMany({
             where: { userId: user.userId },
-            include: {
+            select: {
+                id: true,
+                orderNumber: true,
+                userId: true,
+                status: true,
+                totalAmount: true,
+                shippingFee: true,
+                taxAmount: true,
+                discountAmount: true,
+                finalAmount: true,
+                paymentMethod: true,
+                paymentStatus: true,
+                shippingAddressId: true,
+                billingAddressId: true,
+                notes: true,
+                createdAt: true,
+                updatedAt: true,
                 user: {
                     select: { name: true, email: true }
                 },
                 items: {
                     include: {
                         product: {
-                            select: {
-                                id: true,
-                                name: true,
-                                images: true
-                            },
+                            select: { id: true, name: true, images: true },
                             include: {
                                 category: {
-                                    select: {
-                                        id: true,
-                                        name: true
-                                    }
+                                    select: { id: true, name: true }
                                 }
                             }
                         }
@@ -244,24 +253,39 @@ export async function POST(request: NextRequest) {
             paymentMethod: 'CREDIT_CARD',
             notes: notes || ''
         }
-        let order: Awaited<ReturnType<typeof prisma.order.create>>
+        // Dönüşte select kullan: guestCustomer* kolonları DB'de yoksa SELECT 500 verir
+        const orderSelect = {
+            id: true,
+            orderNumber: true,
+            userId: true,
+            status: true,
+            totalAmount: true,
+            shippingFee: true,
+            taxAmount: true,
+            discountAmount: true,
+            finalAmount: true,
+            paymentMethod: true,
+            paymentStatus: true,
+            shippingAddressId: true,
+            billingAddressId: true,
+            notes: true,
+            createdAt: true,
+            updatedAt: true,
+            user: true,
+            items: { include: { product: true } }
+        } as const
+        let order: { id: string; orderNumber: string; user: unknown; items: unknown; [key: string]: unknown }
         try {
             order = await prisma.order.create({
                 data: { ...baseData, ...guestData },
-                include: {
-                    user: true,
-                    items: { include: { product: true } }
-                }
+                select: orderSelect
             })
         } catch (createError: unknown) {
-            const msg = createError instanceof Error ? createError.message : ''
-            if (Object.keys(guestData).length > 0 && (msg.includes('column') || msg.includes('guestCustomer'))) {
+            const msg = String(createError instanceof Error ? createError.message : '')
+            if (Object.keys(guestData).length > 0 && (msg.includes('column') || msg.includes('guestCustomer') || msg.includes('does not exist'))) {
                 order = await prisma.order.create({
                     data: baseData,
-                    include: {
-                        user: true,
-                        items: { include: { product: true } }
-                    }
+                    select: orderSelect
                 })
             } else {
                 throw createError

@@ -218,14 +218,30 @@ export default function CheckoutPage() {
 
       const orderData: any = {
         items: cartItems.map(item => ({
-          productId: item.id,
-          quantity: item.quantity,
-          price: item.price,
-          variationId: item.variationId
+          productId: String(item.id),
+          quantity: Number(item.quantity) || 1,
+          price: Number(item.price),
+          variationId: item.variationId ? String(item.variationId) : undefined
         })),
-        shippingAddress,
-        billingAddress: useSameAddress ? undefined : billingAddress,
-        notes
+        shippingAddress: {
+          title: String(shippingAddress.title ?? '').trim(),
+          firstName: String(shippingAddress.firstName ?? '').trim(),
+          lastName: String(shippingAddress.lastName ?? '').trim(),
+          phone: String(shippingAddress.phone ?? '').trim(),
+          city: String(shippingAddress.city ?? '').trim(),
+          district: String(shippingAddress.district ?? '').trim(),
+          fullAddress: String(shippingAddress.fullAddress ?? '').trim()
+        },
+        billingAddress: useSameAddress ? undefined : {
+          title: String(billingAddress.title ?? '').trim(),
+          firstName: String(billingAddress.firstName ?? '').trim(),
+          lastName: String(billingAddress.lastName ?? '').trim(),
+          phone: String(billingAddress.phone ?? '').trim(),
+          city: String(billingAddress.city ?? '').trim(),
+          district: String(billingAddress.district ?? '').trim(),
+          fullAddress: String(billingAddress.fullAddress ?? '').trim()
+        },
+        notes: notes ? String(notes).trim() : ''
       }
 
       if (!token) {
