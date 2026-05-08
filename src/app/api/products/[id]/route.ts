@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { handleApiError, NotFoundError, ConflictError, ValidationError, requireAdmin } from '@/lib/error-handler'
+import { revalidatePath } from 'next/cache'
 
 export async function DELETE(
     request: NextRequest,
@@ -143,6 +144,7 @@ export async function PUT(
         const existingProduct = await prisma.product.findUnique({
             where: { id: productId },
             include: {
+                category: true,
                 variations: {
                     include: {
                         attributes: true
@@ -408,6 +410,16 @@ export async function PUT(
             await prisma.productVariation.deleteMany({
                 where: { productId: productId }
             })
+        }
+
+        // Public sayfalardaki ISR cache'ini hemen temizle
+        revalidatePath('/')
+        revalidatePath('/products')
+        if (existingProduct.slug) {
+            revalidatePath(`/products/${existingProduct.slug}`)
+        }
+        if (existingProduct.category?.slug) {
+            revalidatePath(`/categories/${existingProduct.category.slug}`)
         }
 
         // Güncellenmiş ürünü varyasyonlarla birlikte döndür
