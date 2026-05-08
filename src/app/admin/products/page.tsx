@@ -66,9 +66,12 @@ export default function AdminProductsPage() {
         return
       }
 
-      const response = await fetch('/api/products?admin=true', {
+      const response = await fetch(`/api/products?admin=true&t=${Date.now()}`, {
+        cache: 'no-store',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         }
       })
       

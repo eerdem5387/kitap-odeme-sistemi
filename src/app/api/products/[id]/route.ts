@@ -414,7 +414,10 @@ export async function PUT(
 
         // Public sayfalardaki ISR cache'ini hemen temizle
         revalidatePath('/')
+        revalidatePath('/admin/products')
         revalidatePath('/products')
+        revalidatePath('/products/[slug]', 'page')
+        revalidatePath('/categories/[slug]', 'page')
         if (existingProduct.slug) {
             revalidatePath(`/products/${existingProduct.slug}`)
         }
