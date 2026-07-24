@@ -311,7 +311,7 @@ function StatCard({ title, value, trend, icon: Icon, color }: any) {
 
 function StatusBadge({ status }: { status: string }) {
     const styles = {
-        PENDING: 'bg-yellow-50 text-yellow-700 border-yellow-100',
+        PENDING: 'bg-red-50 text-red-700 border-red-100',
         CONFIRMED: 'bg-blue-50 text-blue-700 border-blue-100',
         SHIPPED: 'bg-purple-50 text-purple-700 border-purple-100',
         DELIVERED: 'bg-green-50 text-green-700 border-green-100',
@@ -319,7 +319,7 @@ function StatusBadge({ status }: { status: string }) {
     }
 
     const labels = {
-        PENDING: 'Beklemede',
+        PENDING: 'Başarısız',
         CONFIRMED: 'Onaylandı',
         SHIPPED: 'Kargoda',
         DELIVERED: 'Tamamlandı',

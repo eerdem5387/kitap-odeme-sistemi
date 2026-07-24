@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
+import { resolveOrderFailureReason } from '@/lib/payment-failure-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,12 +9,9 @@ export async function GET(request: NextRequest) {
     try {
         console.log('=== ADMIN ORDERS LIST API CALLED ===')
 
-        // Authorization header'dan token'ı al
         const authHeader = request.headers.get('authorization')
-        console.log('Auth header:', authHeader)
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            console.log('Auth error: Invalid authorization header')
             return NextResponse.json(
                 { error: 'Yetkilendirme gerekli' },
                 { status: 401 }
@@ -21,30 +19,22 @@ export async function GET(request: NextRequest) {
         }
 
         const token = authHeader.substring(7)
-        console.log('Token:', token)
-
-        // JWT token'ı doğrula
         const decodedToken = verifyToken(token)
-        console.log('Decoded token:', decodedToken)
 
         if (!decodedToken) {
-            console.log('Token verification failed')
             return NextResponse.json(
                 { error: 'Geçersiz token' },
                 { status: 401 }
             )
         }
 
-        // Admin kontrolü
         if (decodedToken.role !== 'ADMIN') {
-            console.log('Access denied: Not admin')
             return NextResponse.json(
                 { error: 'Admin yetkisi gerekli' },
                 { status: 403 }
             )
         }
 
-        // Sadece mevcut DB kolonlarını seç (guestCustomerEmail/guestCustomerName migration sonrası eklenebilir)
         const orders = await prisma.order.findMany({
             select: {
                 id: true,
@@ -86,6 +76,15 @@ export async function GET(request: NextRequest) {
                         }
                     }
                 },
+                payments: {
+                    select: {
+                        id: true,
+                        status: true,
+                        gatewayResponse: true,
+                        createdAt: true
+                    },
+                    orderBy: { createdAt: 'desc' }
+                },
                 shippingAddress: true,
                 billingAddress: true,
                 _count: { select: { items: true } }
@@ -93,22 +92,64 @@ export async function GET(request: NextRequest) {
             orderBy: { createdAt: 'desc' }
         })
 
-        // Prisma Decimal ve Date alanlarını JSON uyumlu forma çevir
-        const serialized = orders.map(o => ({
-            ...o,
-            totalAmount: Number(o.totalAmount),
-            shippingFee: Number(o.shippingFee),
-            taxAmount: Number(o.taxAmount),
-            discountAmount: Number(o.discountAmount),
-            finalAmount: Number(o.finalAmount),
-            createdAt: o.createdAt.toISOString(),
-            updatedAt: o.updatedAt.toISOString(),
-            items: o.items.map(item => ({
-                ...item,
-                unitPrice: Number(item.unitPrice),
-                totalPrice: Number(item.totalPrice)
-            }))
-        }))
+        const orderIds = orders.map((o) => o.id)
+        const failureLogs = orderIds.length > 0
+            ? await prisma.$queryRawUnsafe<Array<{
+                id: string
+                orderId: string
+                reason: string
+                errorCode: string | null
+                source: string
+                createdAt: Date
+            }>>(
+                `SELECT id, "orderId", reason, "errorCode", source, "createdAt"
+                 FROM payment_failure_logs
+                 WHERE "orderId" = ANY($1::text[])
+                 ORDER BY "createdAt" DESC`,
+                orderIds
+            )
+            : []
+
+        const logsByOrder = new Map<string, typeof failureLogs>()
+        for (const log of failureLogs) {
+            const list = logsByOrder.get(log.orderId) || []
+            list.push(log)
+            logsByOrder.set(log.orderId, list)
+        }
+
+        const serialized = orders.map(o => {
+            const logs = logsByOrder.get(o.id) || []
+            const failureReason = resolveOrderFailureReason({
+                paymentStatus: o.paymentStatus,
+                notes: o.notes,
+                payments: o.payments,
+                failureLogs: logs
+            })
+
+            return {
+                ...o,
+                totalAmount: Number(o.totalAmount),
+                shippingFee: Number(o.shippingFee),
+                taxAmount: Number(o.taxAmount),
+                discountAmount: Number(o.discountAmount),
+                finalAmount: Number(o.finalAmount),
+                createdAt: o.createdAt.toISOString(),
+                updatedAt: o.updatedAt.toISOString(),
+                failureReason,
+                failureLogs: logs.map((log) => ({
+                    id: log.id,
+                    reason: log.reason,
+                    errorCode: log.errorCode,
+                    source: log.source,
+                    createdAt: new Date(log.createdAt).toISOString()
+                })),
+                items: o.items.map(item => ({
+                    ...item,
+                    unitPrice: Number(item.unitPrice),
+                    totalPrice: Number(item.totalPrice)
+                }))
+            }
+        })
 
         return NextResponse.json(serialized)
     } catch (error) {
@@ -121,4 +162,4 @@ export async function GET(request: NextRequest) {
             { status: 500 }
         )
     }
-} 
+}

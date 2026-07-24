@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
 import { emailService } from '@/lib/email'
+import { resolveOrderFailureReason } from '@/lib/payment-failure-log'
 
 export async function GET(
     request: NextRequest,
@@ -114,8 +115,55 @@ export async function GET(
             )
         }
 
+        const failureLogs = await prisma.$queryRawUnsafe<Array<{
+            id: string
+            orderId: string
+            reason: string
+            errorCode: string | null
+            source: string
+            rawPayload: string | null
+            createdAt: Date
+        }>>(
+            `SELECT id, "orderId", reason, "errorCode", source, "rawPayload", "createdAt"
+             FROM payment_failure_logs
+             WHERE "orderId" = $1
+             ORDER BY "createdAt" DESC`,
+            order.id
+        )
+
+        const failureReason = resolveOrderFailureReason({
+            paymentStatus: order.paymentStatus,
+            notes: order.notes,
+            payments: order.payments,
+            failureLogs
+        })
+
         console.log('Order found:', order.id)
-        return NextResponse.json(order)
+        return NextResponse.json({
+            ...order,
+            totalAmount: Number(order.totalAmount),
+            shippingFee: Number(order.shippingFee),
+            taxAmount: Number(order.taxAmount),
+            discountAmount: Number(order.discountAmount),
+            finalAmount: Number(order.finalAmount),
+            failureReason,
+            failureLogs: failureLogs.map((log) => ({
+                id: log.id,
+                reason: log.reason,
+                errorCode: log.errorCode,
+                source: log.source,
+                createdAt: new Date(log.createdAt).toISOString()
+            })),
+            payments: order.payments.map((p) => ({
+                ...p,
+                amount: Number(p.amount)
+            })),
+            items: order.items.map((item) => ({
+                ...item,
+                unitPrice: Number(item.unitPrice),
+                totalPrice: Number(item.totalPrice)
+            }))
+        })
     } catch (error) {
         console.error('Error fetching admin order detail:', error)
         return NextResponse.json(

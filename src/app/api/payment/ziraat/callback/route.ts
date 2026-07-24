@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ziraatPaymentService } from '@/lib/ziraat-payment'
 import { prisma } from '@/lib/prisma'
 import { emailService } from '@/lib/email'
+import { extractFailureReason, logPaymentFailure } from '@/lib/payment-failure-log'
 
 // Helper to get base URL from request
 function getBaseUrl(request: NextRequest): string {
@@ -82,11 +83,17 @@ async function handleCallback(data: Record<string, any>, baseUrl: string) {
 
     } else {
         // Ödeme Başarısız
+        const extracted = extractFailureReason({
+            ...data,
+            error: result.error
+        })
+        const failureReason = extracted.reason || result.error || 'Ödeme işlemi başarısız oldu'
+
         await prisma.order.update({
             where: { id: orderId },
             data: {
                 paymentStatus: 'FAILED',
-                notes: `Ziraat POS Hatası: ${result.error}`
+                notes: `Ziraat POS Hatası: ${failureReason}`
             }
         })
 
@@ -100,15 +107,27 @@ async function handleCallback(data: Record<string, any>, baseUrl: string) {
                     transactionId: data.TransId, // Başarısız işlemde de dönebilir
                     gatewayResponse: JSON.stringify({
                         ...data,
-                        error: result.error
+                        error: result.error,
+                        failureReason
                     })
                 }
             })
         } catch {}
 
+        await logPaymentFailure({
+            orderId,
+            reason: failureReason,
+            errorCode: extracted.errorCode,
+            source: 'ziraat_callback',
+            rawPayload: {
+                ...data,
+                verifyError: result.error
+            }
+        })
+
         return {
             success: false,
-            redirectUrl: `${baseUrl}/payment/fail?orderId=${orderId}&error=${encodeURIComponent(result.error || 'OdemeBasarisiz')}`
+            redirectUrl: `${baseUrl}/payment/fail?orderId=${orderId}&error=${encodeURIComponent(failureReason)}`
         }
     }
 }

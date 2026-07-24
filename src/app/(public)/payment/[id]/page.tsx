@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { CreditCard, Lock, CheckCircle, AlertCircle, ArrowLeft, User } from 'lucide-react'
-
-type CardType = 'unknown' | 'credit' | 'debit'
+import { CreditCard, Lock, AlertCircle, ArrowLeft } from 'lucide-react'
 
 interface Order {
   id: string
@@ -43,18 +41,7 @@ export default function PaymentPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
-  
-  // Payment form state
-  const [cardNumber, setCardNumber] = useState('')
-  const [cardHolder, setCardHolder] = useState('')
-  const [expiryMonth, setExpiryMonth] = useState('')
-  const [expiryYear, setExpiryYear] = useState('')
-  const [cvv, setCvv] = useState('')
   const [installments, setInstallments] = useState<'1' | '2' | '3'>('1')
-  const [cardType, setCardType] = useState<CardType>('unknown')
-
-  // Provider'ı env'den al, yoksa default ziraat olsun (gerçek projede)
-  const provider = process.env.NEXT_PUBLIC_PAYMENT_PROVIDER || 'ziraat'
 
   useEffect(() => {
     fetchOrder()
@@ -94,17 +81,13 @@ export default function PaymentPage() {
       const token = localStorage.getItem('token')
       const guestEmail = localStorage.getItem('userEmail') || ''
 
-      // Hesap kartında her zaman tek çekim, kredi kartında seçilen taksit
-      const effectiveInstallments = cardType === 'debit' ? '1' : installments
-
-      // Ödeme başlatma isteği
       const payload = {
         orderId,
         amount: order?.finalAmount ? Number(order.finalAmount) : 0,
         method: 'CREDIT_CARD',
         guestEmail: !token ? guestEmail : undefined,
         // Tek çekimde installments göndermiyoruz; taksitliyse '2' veya '3' gönderiyoruz.
-        installments: effectiveInstallments === '1' ? undefined : effectiveInstallments
+        installments: installments === '1' ? undefined : installments
       }
 
       const res = await fetch('/api/payment/process', {
@@ -123,11 +106,9 @@ export default function PaymentPage() {
       }
 
       if (data.success && data.requiresRedirect && data.redirectUrl && data.formParams) {
-        // Ziraat Bankası Form Post İşlemi
         const form = document.createElement('form')
         form.method = 'POST'
         form.action = data.redirectUrl
-        // form.target = '_blank' // İsteğe bağlı yeni sekme
         form.style.display = 'none'
 
         Object.entries(data.formParams).forEach(([key, value]) => {
@@ -147,47 +128,6 @@ export default function PaymentPage() {
     } catch (err: any) {
       setError(err?.message || 'Ödeme başlatılamadı')
       setIsProcessing(false)
-    }
-  }
-
-  // ... Helper functions (formatCardNumber, getProductDisplayName) ...
-  const formatCardNumber = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '')
-    const matches = v.match(/\d{4,16}/g)
-    const match = (matches && matches[0]) || ''
-    const parts: string[] = []
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4))
-    }
-    if (parts.length) {
-      return parts.join(' ')
-    } else {
-      return v
-    }
-  }
-
-  const handleCardNumberChange = (value: string) => {
-    const formatted = formatCardNumber(value)
-    setCardNumber(formatted)
-
-    const digits = formatted.replace(/\s+/g, '')
-    if (digits.length < 6) {
-      setCardType('unknown')
-      return
-    }
-
-    const bin = digits.slice(0, 6)
-    // TODO: Ziraat'tan alınan debit BIN listesi ile doldurulabilir.
-    const DEBIT_BINS: string[] = []
-
-    if (DEBIT_BINS.includes(bin)) {
-      setCardType('debit')
-      // Hesap kartında sadece tek çekim
-      if (installments !== '1') {
-        setInstallments('1')
-      }
-    } else {
-      setCardType('credit')
     }
   }
 
@@ -232,7 +172,7 @@ export default function PaymentPage() {
     )
   }
 
-  if (!order) return null // Should be handled by error state above
+  if (!order) return null
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 pb-20 lg:pb-0">
@@ -279,103 +219,6 @@ export default function PaymentPage() {
             )}
 
             <div className="space-y-6">
-              {/* Kart Bilgileri (sadece tür tespiti için) */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-900">Kart Bilgileri</h3>
-                  <span className="text-xs text-gray-500">
-                    {cardType === 'debit'
-                      ? 'Hesap kartı algılandı • Taksit yok'
-                      : cardType === 'credit'
-                      ? 'Kredi kartı algılandı'
-                      : 'Kart tipini anlamak için numarayı girin'}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Kart Numarası
-                    </label>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      maxLength={19}
-                      value={cardNumber}
-                      onChange={(e) => handleCardNumberChange(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      placeholder="0000 0000 0000 0000"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Kart Üzerindeki İsim
-                    </label>
-                    <input
-                      type="text"
-                      value={cardHolder}
-                      onChange={(e) => setCardHolder(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm uppercase"
-                      placeholder="AD SOYAD"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Son Kullanma (AA / YY)
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          maxLength={2}
-                          value={expiryMonth}
-                          onChange={(e) => setExpiryMonth(e.target.value.replace(/[^0-9]/g, ''))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                          placeholder="AA"
-                        />
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          maxLength={2}
-                          value={expiryYear}
-                          onChange={(e) => setExpiryYear(e.target.value.replace(/[^0-9]/g, ''))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                          placeholder="YY"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Güvenlik Kodu (CVV)
-                      </label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        maxLength={4}
-                        value={cvv}
-                        onChange={(e) => setCvv(e.target.value.replace(/[^0-9]/g, ''))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                        placeholder="CVV"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-5">
-                <div className="flex items-center mb-2">
-                  <Lock className="h-5 w-5 text-blue-600 mr-2" />
-                  <h3 className="text-sm font-bold text-blue-900">3D Secure ile Ödeme</h3>
-                </div>
-                <p className="text-sm text-blue-800">
-                  Kart bilgilerinizi bankanın güvenli ödeme sayfasında gireceksiniz.
-                </p>
-              </div>
-
               {/* Taksit Seçenekleri */}
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-gray-700">Taksit seçenekleri</p>
@@ -394,27 +237,35 @@ export default function PaymentPage() {
                   <button
                     type="button"
                     onClick={() => setInstallments('2')}
-                    disabled={cardType === 'debit'}
                     className={`flex-1 px-3 py-2 rounded-xl border text-sm font-medium transition-all ${
                       installments === '2'
                         ? 'border-green-600 bg-green-50 text-gray-900 ring-2 ring-green-200'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                    } ${cardType === 'debit' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    }`}
                   >
                     2 Taksit
                   </button>
                   <button
                     type="button"
                     onClick={() => setInstallments('3')}
-                    disabled={cardType === 'debit'}
                     className={`flex-1 px-3 py-2 rounded-xl border text-sm font-medium transition-all ${
                       installments === '3'
                         ? 'border-green-600 bg-green-50 text-gray-900 ring-2 ring-green-200'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                    } ${cardType === 'debit' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    }`}
                   >
                     3 Taksit
                   </button>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <Lock className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-blue-900 leading-relaxed">
+                    Ödemeyi Başlat butonuna tıkladıktan sonra Ziraat ödeme sayfasına yönlendirileceksiniz.
+                    Kart bilgilerini orada girip ödemeyi tamamlayabilirsiniz. Tüm bankalar geçerlidir.
+                  </p>
                 </div>
               </div>
 
@@ -437,10 +288,10 @@ export default function PaymentPage() {
               </button>
             </div>
 
-            <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-100 rounded-xl">
-              <div className="flex items-center text-sm text-blue-800">
+            <div className="mt-6 p-4 bg-gray-50 border border-gray-100 rounded-xl">
+              <div className="flex items-center text-sm text-gray-700">
                 <Lock className="h-4 w-4 mr-2 flex-shrink-0" />
-                <span className="font-medium">Ödeme bilgileriniz SSL ile şifrelenerek güvenli şekilde işlenir.</span>
+                <span className="font-medium">Ödeme Ziraat Bankası 3D Secure sayfasında güvenli şekilde tamamlanır.</span>
               </div>
             </div>
           </div>
@@ -449,7 +300,6 @@ export default function PaymentPage() {
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg sm:shadow-xl border border-gray-100 p-4 sm:p-6 sticky bottom-20 lg:bottom-auto lg:top-8 z-40 lg:z-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-6 pb-4 border-b border-gray-200">Sipariş Özeti</h2>
             
-            {/* Order Items */}
             <div className="space-y-4 mb-6">
               {order.items.map((item) => (
                 <div key={item.id} className="flex items-center space-x-4">
@@ -477,7 +327,6 @@ export default function PaymentPage() {
               ))}
             </div>
             
-            {/* Totals */}
             <div className="border-t pt-4 space-y-2">
               <div className="flex justify-between">
                 <span className="text-gray-600">Ara Toplam</span>

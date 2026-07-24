@@ -220,6 +220,7 @@ model Order {
   billingAddress  Address      @relation("BillingAddress", fields: [billingAddressId], references: [id])
   items           OrderItem[]
   payments        Payment[]
+  failureLogs     PaymentFailureLog[]
 
   @@map("orders")
 }
@@ -258,6 +259,22 @@ model Payment {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+model PaymentFailureLog {
+  id         String   @id @default(cuid())
+  orderId    String
+  reason     String
+  errorCode  String?
+  source     String   // ziraat_callback | mock_callback | system
+  rawPayload String?
+  createdAt  DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("payment_failure_logs")
 }
 
 model Review {

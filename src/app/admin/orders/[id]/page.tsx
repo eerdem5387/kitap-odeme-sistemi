@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, Truck, CheckCircle, Clock, MapPin, CreditCard, Edit, Save, X } from 'lucide-react'
+import { Package, Truck, CheckCircle, Clock, MapPin, CreditCard, Edit, Save, X, AlertCircle } from 'lucide-react'
 
 interface OrderItem {
   id: string
@@ -55,6 +55,14 @@ interface Payment {
   createdAt: string
 }
 
+interface FailureLog {
+  id: string
+  reason: string
+  errorCode?: string | null
+  source: string
+  createdAt: string
+}
+
 interface Order {
   id: string
   orderNumber: string
@@ -65,6 +73,8 @@ interface Order {
   discountAmount: number
   finalAmount: number
   notes?: string
+  failureReason?: string | null
+  failureLogs?: FailureLog[]
   guestCustomerName?: string | null
   guestCustomerEmail?: string | null
   createdAt: string
@@ -167,7 +177,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'bg-red-100 text-red-800'
       case 'CONFIRMED':
         return 'bg-blue-100 text-blue-800'
       case 'SHIPPED':
@@ -184,7 +194,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   const getStatusText = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return 'Beklemede'
+        return 'Başarısız'
       case 'CONFIRMED':
         return 'Onaylandı'
       case 'SHIPPED':
@@ -201,7 +211,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return <Clock className="h-5 w-5" />
+        return <AlertCircle className="h-5 w-5" />
       case 'CONFIRMED':
         return <CheckCircle className="h-5 w-5" />
       case 'SHIPPED':
@@ -217,7 +227,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   const getStatusExplanation = (orderStatus: string, paymentStatus: string, payments: Payment[]) => {
     // Ödeme durumu açıklamaları
     if (paymentStatus === 'PENDING') {
-      return 'Müşteri henüz ödemeyi tamamlamadı'
+      return 'Ödeme tamamlanmadı / başarısız'
     }
     
     if (paymentStatus === 'FAILED') {
@@ -360,7 +370,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
                       onChange={(e) => setEditedStatus(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="PENDING">Beklemede</option>
+                      <option value="PENDING">Başarısız</option>
                       <option value="CONFIRMED">Onaylandı</option>
                       <option value="SHIPPED">Kargoda</option>
                       <option value="DELIVERED">Teslim Edildi</option>
@@ -393,6 +403,12 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
                       <p className="text-sm text-gray-500 mt-2 pl-1">
                         {getStatusExplanation(order.status, order.paymentStatus, order.payments)}
                       </p>
+                    )}
+                    {order.failureReason && order.paymentStatus !== 'COMPLETED' && (
+                      <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg">
+                        <p className="text-xs font-semibold text-red-700 mb-1">Başarısız Sebebi</p>
+                        <p className="text-sm text-red-800">{order.failureReason}</p>
+                      </div>
                     )}
                   </div>
                   {order.notes && (
@@ -561,35 +577,40 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                     order.paymentStatus === 'COMPLETED' 
                       ? 'bg-green-100 text-green-800' 
-                      : order.paymentStatus === 'PENDING'
-                      ? 'bg-yellow-100 text-yellow-800'
                       : 'bg-red-100 text-red-800'
                   }`}>
-                    {order.paymentStatus === 'COMPLETED' ? 'Ödendi' : 
-                     order.paymentStatus === 'PENDING' ? 'Beklemede' : 'Başarısız'}
+                    {order.paymentStatus === 'COMPLETED' ? 'Ödendi' : 'Başarısız'}
                   </span>
-                  {order.paymentStatus === 'PENDING' && (
-                    <p className="text-xs text-gray-500">
-                      Müşteri henüz ödemeyi tamamlamadı
+                  {order.failureReason && order.paymentStatus !== 'COMPLETED' && (
+                    <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-2 py-1">
+                      {order.failureReason}
                     </p>
                   )}
-                  {order.paymentStatus === 'FAILED' && (() => {
-                    const failedPayment = order.payments.find(p => p.status === 'FAILED')
-                    if (failedPayment?.gatewayResponse) {
-                      try {
-                        const gatewayData = JSON.parse(failedPayment.gatewayResponse)
-                        const errorMsg = gatewayData.ErrMsg || gatewayData.errmsg || gatewayData.error || gatewayData.Error
-                        if (errorMsg) {
-                          return <p className="text-xs text-red-600">{errorMsg}</p>
-                        }
-                      } catch (e) {
-                        console.error('Error parsing gateway response:', e)
-                      }
-                    }
-                    return <p className="text-xs text-red-600">Ödeme işlemi başarısız oldu</p>
-                  })()}
                 </div>
               </div>
+
+              {/* Failure Logs */}
+              {order.failureLogs && order.failureLogs.length > 0 && (
+                <div className="mt-6 pt-6 border-t">
+                  <h3 className="font-medium text-gray-900 mb-2">Başarısız Ödeme Logları</h3>
+                  <div className="space-y-2">
+                    {order.failureLogs.map((log) => (
+                      <div key={log.id} className="p-3 bg-red-50 border border-red-100 rounded-lg">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm text-red-800 font-medium">{log.reason}</p>
+                          <span className="text-[11px] text-red-500 whitespace-nowrap">
+                            {new Date(log.createdAt).toLocaleString('tr-TR')}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-red-600">
+                          <span>Kaynak: {log.source}</span>
+                          {log.errorCode && <span>Kod: {log.errorCode}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Payment History */}
               {order.payments.length > 0 && (

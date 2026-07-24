@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Local data exports (may contain PII)
+orders-export.json
+orders-export.csv

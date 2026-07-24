@@ -89,7 +89,7 @@ export default function AdminPaymentsPage() {
       case 'COMPLETED':
         return 'bg-green-100 text-green-800'
       case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'bg-red-100 text-red-800'
       case 'FAILED':
         return 'bg-red-100 text-red-800'
       default:
@@ -102,7 +102,7 @@ export default function AdminPaymentsPage() {
       case 'COMPLETED':
         return 'Tamamlandı'
       case 'PENDING':
-        return 'Beklemede'
+        return 'Başarısız'
       case 'FAILED':
         return 'Başarısız'
       default:
@@ -180,11 +180,11 @@ export default function AdminPaymentsPage() {
 
         <div className="bg-white p-3 sm:p-4 lg:p-6 rounded-lg shadow-sm border">
           <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left">
-            <div className="p-1.5 sm:p-2 bg-yellow-100 rounded-lg flex-shrink-0 mb-2 sm:mb-0">
-              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-yellow-600" />
+            <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg flex-shrink-0 mb-2 sm:mb-0">
+              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-red-600" />
             </div>
             <div className="sm:ml-3 lg:ml-4 flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-medium text-gray-600">Bekleyen</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Başarısız</p>
               <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
                 {payments.filter(p => p.status === 'PENDING').length}
               </p>

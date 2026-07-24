@@ -27,6 +27,7 @@ interface Order {
   paymentStatus: string
   finalAmount: number
   createdAt: string
+  failureReason?: string | null
   guestCustomerName?: string | null
   guestCustomerEmail?: string | null
   user?: {
@@ -59,7 +60,7 @@ interface Order {
 
 const TABS = [
   { id: 'all', label: 'Tümü' },
-  { id: 'PENDING', label: 'Bekleyen' },
+  { id: 'PENDING', label: 'Başarısız' },
   { id: 'CONFIRMED', label: 'Onaylanan' },
   { id: 'SHIPPED', label: 'Kargoda' },
   { id: 'DELIVERED', label: 'Teslim Edilen' },
@@ -153,7 +154,7 @@ export default function AdminOrdersPage() {
   // Status Badge Component
   const StatusBadge = ({ status, type = 'order' }: { status: string, type?: 'order' | 'payment' }) => {
     const config = {
-      PENDING: { color: 'bg-yellow-50 text-yellow-700 border-yellow-100', icon: Clock, label: 'Bekliyor' },
+      PENDING: { color: 'bg-red-50 text-red-700 border-red-100', icon: AlertCircle, label: 'Başarısız' },
       CONFIRMED: { color: 'bg-blue-50 text-blue-700 border-blue-100', icon: CheckCircle2, label: 'Onaylandı' },
       SHIPPED: { color: 'bg-purple-50 text-purple-700 border-purple-100', icon: Truck, label: 'Kargoda' },
       DELIVERED: { color: 'bg-green-50 text-green-700 border-green-100', icon: Package, label: 'Teslim Edildi' },
@@ -244,6 +245,7 @@ export default function AdminOrdersPage() {
                 <th className="px-6 py-4 font-semibold text-gray-600">Tutar</th>
                 <th className="px-6 py-4 font-semibold text-gray-600">Durum</th>
                 <th className="px-6 py-4 font-semibold text-gray-600">Ödeme</th>
+                <th className="px-6 py-4 font-semibold text-gray-600">Başarısız Sebebi</th>
                 <th className="px-6 py-4 font-semibold text-gray-600">Tarih</th>
                 <th className="px-6 py-4 font-semibold text-gray-600 text-right">İşlem</th>
               </tr>
@@ -275,6 +277,15 @@ export default function AdminOrdersPage() {
                     <td className="px-6 py-4">
                       <StatusBadge status={order.paymentStatus} type="payment" />
                     </td>
+                    <td className="px-6 py-4 max-w-[220px]">
+                      {order.failureReason ? (
+                        <span className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-2 py-1 inline-block leading-snug">
+                          {order.failureReason}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-gray-500">
                       {new Date(order.createdAt).toLocaleDateString('tr-TR')}
                       <div className="text-xs text-gray-400">
@@ -294,7 +305,7 @@ export default function AdminOrdersPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center">
                       <ShoppingCart className="h-10 w-10 text-gray-300 mb-3" />
                       <p>Sipariş bulunamadı.</p>
@@ -343,6 +354,11 @@ export default function AdminOrdersPage() {
                     <Eye className="h-3 w-3 ml-1" />
                   </span>
                 </div>
+                {order.failureReason && (
+                  <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-2 py-1 mt-1">
+                    {order.failureReason}
+                  </p>
+                )}
               </button>
             ))
           ) : (

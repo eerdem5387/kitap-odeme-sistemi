@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { mockPaymentService } from '@/lib/mock-payment'
 import { prisma } from '@/lib/prisma'
 import { emailService } from '@/lib/email'
+import { logPaymentFailure } from '@/lib/payment-failure-log'
 
 export async function POST(request: NextRequest) {
   try {
@@ -93,11 +94,12 @@ export async function POST(request: NextRequest) {
     } else {
       // Siparişi güncelle (başarısız)
       if (result.orderId) {
+        const failureReason = result.error || 'Mock ödeme başarısız'
         await prisma.order.update({
           where: { id: result.orderId },
           data: {
             paymentStatus: 'FAILED',
-            notes: `Mock ödeme başarısız. Hata: ${result.error}`
+            notes: `Mock ödeme başarısız. Hata: ${failureReason}`
           }
         })
 
@@ -111,9 +113,18 @@ export async function POST(request: NextRequest) {
             transactionId: result.transactionId || '',
             gatewayResponse: JSON.stringify({
               responseCode: result.responseCode || '',
-              responseMessage: result.error || ''
+              responseMessage: failureReason,
+              ErrMsg: failureReason
             })
           }
+        })
+
+        await logPaymentFailure({
+          orderId: result.orderId,
+          reason: failureReason,
+          errorCode: result.responseCode || null,
+          source: 'mock_callback',
+          rawPayload: result
         })
       }
 
