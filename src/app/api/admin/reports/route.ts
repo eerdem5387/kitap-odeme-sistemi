@@ -161,8 +161,8 @@ export async function GET(request: NextRequest) {
         // Bunu raw query ile yapmak daha performanslı olabilir ama şimdilik JS ile gruplayalım
         // Daha iyi performans için: date_trunc('month', created_at) kullanılabilir.
         
-        // En çok satan ürünler
-        const topProducts = await prisma.orderItem.groupBy({
+        // Satılan tüm ürünler (adet sırasıyla)
+        const soldProducts = await prisma.orderItem.groupBy({
             by: ['productId'],
             where: {
                 order: currentPeriodWhere
@@ -175,25 +175,28 @@ export async function GET(request: NextRequest) {
                 _sum: {
                     quantity: 'desc'
                 }
-            },
-            take: 5
+            }
         })
 
-        // Ürün detaylarını al
-        const topProductsDetails = await Promise.all(
-            topProducts.map(async (item) => {
-                const product = await prisma.product.findUnique({
-                    where: { id: item.productId },
-                    select: { name: true, category: { select: { name: true } } }
-                })
-                return {
-                    name: product?.name || 'Bilinmeyen Ürün',
-                    category: product?.category?.name || '-',
-                    sales: item._sum.quantity || 0,
-                    revenue: Number(item._sum.totalPrice || 0)
-                }
+        // Ürün detaylarını tek sorguda al
+        const productIds = soldProducts.map((item) => item.productId)
+        const products = productIds.length > 0
+            ? await prisma.product.findMany({
+                where: { id: { in: productIds } },
+                select: { id: true, name: true, category: { select: { name: true } } }
             })
-        )
+            : []
+        const productMap = new Map(products.map((p) => [p.id, p]))
+
+        const topProductsDetails = soldProducts.map((item) => {
+            const product = productMap.get(item.productId)
+            return {
+                name: product?.name || 'Bilinmeyen Ürün',
+                category: product?.category?.name || '-',
+                sales: item._sum.quantity || 0,
+                revenue: Number(item._sum.totalPrice || 0)
+            }
+        })
 
         // En çok satan kategoriler
         // Bu sorgu biraz karmaşık olduğu için tüm satılan ürünleri çekip gruplayacağız

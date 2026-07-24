@@ -41,9 +41,6 @@ export async function GET(
         const customer = await prisma.user.findUnique({
             where: { id: resolvedParams.id },
             include: {
-                addresses: {
-                    orderBy: { isDefault: 'desc' }
-                },
                 orders: {
                     include: {
                         items: {
@@ -108,8 +105,7 @@ export async function GET(
                 },
                 _count: {
                     select: {
-                        orders: true,
-                        addresses: true
+                        orders: true
                     }
                 }
             }

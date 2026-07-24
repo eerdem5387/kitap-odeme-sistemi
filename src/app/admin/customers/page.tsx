@@ -16,7 +16,6 @@ interface Customer {
   createdAt: string
   _count: {
     orders: number
-    addresses: number
   }
   orders: Array<{
     createdAt: string

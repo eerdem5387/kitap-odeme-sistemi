@@ -25,9 +25,6 @@ export async function GET(request: NextRequest) {
         const user = await prisma.user.findUnique({
             where: { id: payload.userId },
             include: {
-                addresses: {
-                    orderBy: { isDefault: 'desc' }
-                },
                 orders: {
                     select: { id: true }
                 }
@@ -43,7 +40,6 @@ export async function GET(request: NextRequest) {
             name: user.name,
             email: user.email,
             phone: user.phone || null,
-            addresses: user.addresses,
             orderCount: user.orders.length
         })
     } catch (error) {
@@ -76,9 +72,6 @@ export async function PUT(request: NextRequest) {
             where: { id: payload.userId },
             data: updateData,
             include: {
-                addresses: {
-                    orderBy: { isDefault: 'desc' }
-                },
                 orders: {
                     select: { id: true }
                 }
@@ -92,7 +85,6 @@ export async function PUT(request: NextRequest) {
             name: updatedUser.name,
             email: updatedUser.email,
             phone: updatedUser.phone || null,
-            addresses: updatedUser.addresses,
             orderCount: updatedUser.orders.length
         })
     } catch (error) {

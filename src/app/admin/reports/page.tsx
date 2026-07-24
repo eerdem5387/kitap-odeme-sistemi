@@ -120,7 +120,7 @@ export default function AdminReportsPage() {
           ['Yeni Müşteri', reportData.summary.customers.current.toString(), reportData.summary.customers.change],
           ['Ortalama Sepet', `₺${reportData.summary.averageOrder.current.toLocaleString('tr-TR')}`, reportData.summary.averageOrder.change]
         ],
-        'En Çok Satanlar': [
+        'Satılan Ürünler': [
           ['Ürün', 'Kategori', 'Adet', 'Gelir'],
           ...reportData.topProducts.map(p => [p.name, p.category, p.sales.toString(), `₺${p.revenue.toLocaleString('tr-TR')}`])
         ],
@@ -268,63 +268,64 @@ export default function AdminReportsPage() {
         />
       </div>
 
-      {/* Grafikler ve Tablolar */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* En Çok Satanlar */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="font-semibold text-gray-900 mb-4">En Çok Satan Ürünler</h3>
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-500">
-                        <tr>
-                            <th className="px-4 py-2 text-left">Ürün</th>
-                            <th className="px-4 py-2 text-right">Adet</th>
-                            <th className="px-4 py-2 text-right">Gelir</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                        {reportData.topProducts.map((product, idx) => (
-                            <tr key={idx}>
-                                <td className="px-4 py-3 font-medium text-gray-900">
-                                    {product.name}
-                                    <div className="text-xs text-gray-500 font-normal">{product.category}</div>
-                                </td>
-                                <td className="px-4 py-3 text-right">{product.sales}</td>
-                                <td className="px-4 py-3 text-right">₺{product.revenue.toLocaleString('tr-TR')}</td>
-                            </tr>
-                        ))}
-                        {reportData.topProducts.length === 0 && (
-                            <tr>
-                                <td colSpan={3} className="px-4 py-4 text-center text-gray-500">Veri bulunamadı</td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+      {/* Satılan Ürünler */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900">Satılan Ürünler</h3>
+          <span className="text-sm text-gray-500">{reportData.topProducts.length} ürün</span>
         </div>
+        <div className="overflow-x-auto max-h-[32rem] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500 sticky top-0">
+              <tr>
+                <th className="px-4 py-2 text-left">#</th>
+                <th className="px-4 py-2 text-left">Ürün</th>
+                <th className="px-4 py-2 text-left">Kategori</th>
+                <th className="px-4 py-2 text-right">Adet</th>
+                <th className="px-4 py-2 text-right">Gelir</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {reportData.topProducts.map((product, idx) => (
+                <tr key={idx}>
+                  <td className="px-4 py-3 text-gray-500">{idx + 1}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">{product.name}</td>
+                  <td className="px-4 py-3 text-gray-600">{product.category}</td>
+                  <td className="px-4 py-3 text-right">{product.sales}</td>
+                  <td className="px-4 py-3 text-right">₺{product.revenue.toLocaleString('tr-TR')}</td>
+                </tr>
+              ))}
+              {reportData.topProducts.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-4 text-center text-gray-500">Veri bulunamadı</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-        {/* Kategori Performansı */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-            <h3 className="font-semibold text-gray-900 mb-4">En İyi Kategoriler</h3>
-            <div className="space-y-4">
-                {reportData.topCategories.map((cat, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-white text-gray-900 font-bold w-8 h-8 flex items-center justify-center rounded-full border text-xs">
-                                {idx + 1}
-                            </div>
-                            <span className="font-medium text-gray-900">{cat.name}</span>
-                        </div>
-                        <div className="text-right">
-                            <div className="font-bold text-gray-900">₺{cat.revenue.toLocaleString('tr-TR')}</div>
-                            <div className="text-xs text-gray-500">{cat.sales} satış</div>
-                        </div>
-                    </div>
-                ))}
-                 {reportData.topCategories.length === 0 && (
-                    <div className="text-center text-gray-500 py-4">Veri bulunamadı</div>
-                )}
+      {/* Kategori Performansı */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <h3 className="font-semibold text-gray-900 mb-4">En İyi Kategoriler</h3>
+        <div className="space-y-4">
+          {reportData.topCategories.map((cat, idx) => (
+            <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="bg-white text-gray-900 font-bold w-8 h-8 flex items-center justify-center rounded-full border text-xs">
+                  {idx + 1}
+                </div>
+                <span className="font-medium text-gray-900">{cat.name}</span>
+              </div>
+              <div className="text-right">
+                <div className="font-bold text-gray-900">₺{cat.revenue.toLocaleString('tr-TR')}</div>
+                <div className="text-xs text-gray-500">{cat.sales} satış</div>
+              </div>
             </div>
+          ))}
+          {reportData.topCategories.length === 0 && (
+            <div className="text-center text-gray-500 py-4">Veri bulunamadı</div>
+          )}
         </div>
       </div>
     </div>

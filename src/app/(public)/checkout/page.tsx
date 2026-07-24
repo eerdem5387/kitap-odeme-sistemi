@@ -29,7 +29,6 @@ interface Address {
   city: string
   district: string
   fullAddress: string
-  isDefault?: boolean
 }
 
 export default function CheckoutPage() {
@@ -38,8 +37,6 @@ export default function CheckoutPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [step, setStep] = useState(1)
-  const [savedAddresses, setSavedAddresses] = useState<Address[]>([])
-  const [selectedAddressId, setSelectedAddressId] = useState<string>('')
   const [customerEmail, setCustomerEmail] = useState('')
   
   // Form state
@@ -107,42 +104,6 @@ export default function CheckoutPage() {
         // Sessizce varsayılana düş
         console.error('Shipping settings load error:', e)
       }
-
-      // Kullanıcının kayıtlı adreslerini getir
-      const token = safeLocalStorage.getItem('token')
-      if (token) {
-        try {
-          const response = await fetch('/api/users/addresses', {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          })
-          
-          if (response.ok) {
-            const addresses = await response.json()
-            setSavedAddresses(addresses)
-            const defaultAddress = addresses.find((addr: Address) => addr.isDefault)
-            if (defaultAddress) {
-              setSelectedAddressId(defaultAddress.id || '')
-              setShippingAddress({
-                title: defaultAddress.title,
-                firstName: defaultAddress.firstName,
-                lastName: defaultAddress.lastName,
-                phone: defaultAddress.phone,
-                city: defaultAddress.city,
-                district: defaultAddress.district,
-                fullAddress: defaultAddress.fullAddress
-              })
-            }
-          } else if (response.status === 401) {
-            // Geçersiz/expire olmuş token: temizle ve misafir akışına geç
-            safeLocalStorage.removeItem('token')
-            safeLocalStorage.removeItem('user')
-          }
-        } catch (error) {
-          // sessiz geç
-        }
-      }
       
       setIsLoading(false)
     }
@@ -195,19 +156,6 @@ export default function CheckoutPage() {
     return subtotal >= freeShippingThreshold ? 0 : shippingCost
   })()
   const total = subtotal + shipping
-
-  const handleAddressSelect = (address: Address) => {
-    setSelectedAddressId(address.id || '')
-    setShippingAddress({
-      title: address.title,
-      firstName: address.firstName,
-      lastName: address.lastName,
-      phone: address.phone,
-      city: address.city,
-      district: address.district,
-      fullAddress: address.fullAddress
-    })
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -412,11 +360,11 @@ export default function CheckoutPage() {
                     <div>
                       <h3 className="text-sm font-semibold text-yellow-800 mb-1">Misafir Olarak Devam Ediyorsunuz</h3>
                       <p className="text-sm text-yellow-700">
-                        Sipariş takibi için e-posta adresiniz gereklidir. 
+                        Sipariş takibi için e-posta adresiniz gereklidir.
                         <Link href="/login?redirect=/checkout" className="ml-1 font-semibold underline">
                           Giriş yaparak
                         </Link>
-                        {' '}kayıtlı adreslerinizi kullanabilirsiniz.
+                        {' '}siparişlerinizi hesabınızdan takip edebilirsiniz.
                       </p>
                     </div>
                   </div>
@@ -461,48 +409,6 @@ export default function CheckoutPage() {
                       Sipariş onayı ve takip bilgileri bu adrese gönderilecektir.
                   </p>
                 </div>
-                )}
-
-                {/* Kayıtlı Adresler */}
-                {savedAddresses.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
-                      <MapPin className="h-4 w-4 mr-2 text-blue-600" />
-                      Kayıtlı Adresleriniz
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {savedAddresses.map((address) => (
-                        <div
-                          key={address.id}
-                          className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                            selectedAddressId === address.id
-                              ? 'border-blue-500 bg-blue-50 shadow-md'
-                              : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
-                          }`}
-                          onClick={() => handleAddressSelect(address)}
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center space-x-2">
-                              <MapPin className={`h-4 w-4 ${selectedAddressId === address.id ? 'text-blue-600' : 'text-gray-400'}`} />
-                              <p className="font-bold text-gray-900">{address.title}</p>
-                            </div>
-                            {address.isDefault && (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-semibold">
-                                Varsayılan
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm font-medium text-gray-700 mb-1">
-                            {address.firstName} {address.lastName}
-                          </p>
-                          <p className="text-sm text-gray-600 mb-1">{address.phone}</p>
-                          <p className="text-sm text-gray-600">
-                            {address.fullAddress}, {address.district}, {address.city}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 )}
 
                 <div className="space-y-4">

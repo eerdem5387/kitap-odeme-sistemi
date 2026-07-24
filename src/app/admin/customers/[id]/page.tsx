@@ -10,7 +10,6 @@ import {
   User, 
   Mail, 
   Phone, 
-  MapPin, 
   ShoppingCart, 
   DollarSign, 
   Calendar,
@@ -22,18 +21,6 @@ import {
   XCircle,
   Eye
 } from 'lucide-react'
-
-interface Address {
-  id: string
-  title: string
-  firstName: string
-  lastName: string
-  phone: string
-  city: string
-  district: string
-  fullAddress: string
-  isDefault: boolean
-}
 
 interface OrderItem {
   id: string
@@ -81,11 +68,9 @@ interface Customer {
   phone: string | null
   role: string
   createdAt: string
-  addresses: Address[]
   orders: Order[]
   _count: {
     orders: number
-    addresses: number
   }
   totalSpent: number
 }
@@ -302,42 +287,6 @@ export default function AdminCustomerDetailPage({ params }: { params: Promise<{ 
               </div>
             </div>
 
-            {/* Addresses */}
-            {customer.addresses.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm border p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <MapPin className="h-5 w-5 mr-2" />
-                  Adresler ({customer.addresses.length})
-                </h2>
-                <div className="space-y-4">
-                  {customer.addresses.map((address) => (
-                    <div key={address.id} className="border rounded-lg p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="font-medium text-gray-900">{address.title}</span>
-                            {address.isDefault && (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                Varsayılan
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600">
-                            {address.firstName} {address.lastName}
-                          </p>
-                          <p className="text-sm text-gray-600">{address.phone}</p>
-                          <p className="text-sm text-gray-600 mt-1">{address.fullAddress}</p>
-                          <p className="text-sm text-gray-600">
-                            {address.district}, {address.city}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Orders */}
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -448,14 +397,6 @@ export default function AdminCustomerDetailPage({ params }: { params: Promise<{ 
                   <span className="font-semibold text-gray-900">
                     ₺{customer.totalSpent.toLocaleString('tr-TR')}
                   </span>
-                </div>
-                
-                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-purple-600" />
-                    <span className="text-gray-600">Kayıtlı Adres</span>
-                  </div>
-                  <span className="font-semibold text-gray-900">{customer._count.addresses}</span>
                 </div>
               </div>
             </div>

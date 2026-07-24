@@ -54,8 +54,7 @@ export async function GET(request: NextRequest) {
             include: {
                 _count: {
                     select: {
-                        orders: true,
-                        addresses: true
+                        orders: true
                     }
                 },
                 orders: {
