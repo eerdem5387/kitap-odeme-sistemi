@@ -73,6 +73,7 @@ interface Order {
   discountAmount: number
   finalAmount: number
   notes?: string
+  studentName?: string | null
   failureReason?: string | null
   failureLogs?: FailureLog[]
   guestCustomerName?: string | null
@@ -425,6 +426,10 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Müşteri Bilgileri</h2>
               <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Öğrenci Adı:</span>
+                  <span className="font-medium">{order.studentName || '—'}</span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Ad Soyad:</span>
                   <span className="font-medium">{order.guestCustomerName ?? order.user.name}</span>

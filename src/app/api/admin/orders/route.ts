@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
                 shippingAddressId: true,
                 billingAddressId: true,
                 notes: true,
+                studentName: true,
                 createdAt: true,
                 updatedAt: true,
                 user: {

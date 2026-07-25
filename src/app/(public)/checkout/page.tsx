@@ -61,6 +61,7 @@ export default function CheckoutPage() {
   })
   const [paymentMethod, setPaymentMethod] = useState('CREDIT_CARD')
   const [notes, setNotes] = useState('')
+  const [studentName, setStudentName] = useState('')
   const [shippingCost, setShippingCost] = useState<number>(29.99)
   const [freeShippingThreshold, setFreeShippingThreshold] = useState<number>(500)
 
@@ -189,7 +190,14 @@ export default function CheckoutPage() {
           district: String(billingAddress.district ?? '').trim(),
           fullAddress: String(billingAddress.fullAddress ?? '').trim()
         },
-        notes: notes ? String(notes).trim() : ''
+        notes: notes ? String(notes).trim() : '',
+        studentName: String(studentName ?? '').trim()
+      }
+
+      if (!studentName.trim()) {
+        alert('Lütfen öğrenci adını giriniz')
+        setIsSubmitting(false)
+        return
       }
 
       if (!token) {
@@ -477,6 +485,24 @@ export default function CheckoutPage() {
                         className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                     />
                   </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                      <User className="h-4 w-4 mr-1 text-gray-500" />
+                      Öğrenci Adı <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={studentName}
+                      onChange={(e) => setStudentName(e.target.value)}
+                      placeholder="Öğrencinin ad soyadı"
+                      required
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Siparişin hangi öğrenci için alındığını yazınız.
+                    </p>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

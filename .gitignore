@@ -45,3 +45,5 @@ next-env.d.ts
 # Local data exports (may contain PII)
 orders-export.json
 orders-export.csv
+
+siparis-urun-raporu.csv

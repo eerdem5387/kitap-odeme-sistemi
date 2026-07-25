@@ -25,7 +25,8 @@ const createOrderSchema = z.object({
     items: z.array(orderItemSchema).min(1, 'En az bir ürün gerekli'),
     shippingAddress: addressSchema,
     billingAddress: addressSchema.optional(),
-    notes: z.string().optional()
+    notes: z.string().optional(),
+    studentName: z.string().trim().min(1, 'Öğrenci adı gereklidir')
 })
 
 export async function GET(request: NextRequest) {
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
             customerPhone: z.string().optional()
         })
 
-        const { items, shippingAddress, billingAddress, notes, customerEmail, customerName, customerPhone } = validateRequest(guestOrderSchema, body)
+        const { items, shippingAddress, billingAddress, notes, studentName, customerEmail, customerName, customerPhone } = validateRequest(guestOrderSchema, body)
 
         // If no auth user, require customerEmail for guest checkout
         if (!userId) {
@@ -251,7 +252,8 @@ export async function POST(request: NextRequest) {
             shippingAddressId: shippingAddressRecord.id,
             billingAddressId: billingAddressRecord.id,
             paymentMethod: 'CREDIT_CARD',
-            notes: notes || ''
+            notes: notes || '',
+            studentName: studentName.trim()
         }
         // Dönüşte select kullan: guestCustomer* kolonları DB'de yoksa SELECT 500 verir
         const orderSelect = {
@@ -269,6 +271,7 @@ export async function POST(request: NextRequest) {
             shippingAddressId: true,
             billingAddressId: true,
             notes: true,
+            studentName: true,
             createdAt: true,
             updatedAt: true,
             user: true,

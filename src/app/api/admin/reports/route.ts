@@ -260,6 +260,41 @@ export async function GET(request: NextRequest) {
             sales: Number(stat.sales)
         }))
 
+        // Öğrenci bazlı sipariş listesi
+        const studentOrdersRaw = await prisma.$queryRaw`
+            SELECT
+                o.id,
+                o."orderNumber",
+                o."studentName",
+                COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(o."guestCustomerName"), ''), '') as "parentName",
+                CAST(o."finalAmount" AS FLOAT) as "finalAmount",
+                o."createdAt",
+                COALESCE(
+                    string_agg(p.name || ' x' || oi.quantity::text, ', ' ORDER BY p.name),
+                    ''
+                ) as products
+            FROM "orders" o
+            LEFT JOIN "users" u ON u.id = o."userId"
+            LEFT JOIN "order_items" oi ON oi."orderId" = o.id
+            LEFT JOIN "products" p ON p.id = oi."productId"
+            WHERE o."paymentStatus" = 'COMPLETED'
+            AND o.status <> 'CANCELLED'
+            AND o."createdAt" >= ${startDate}
+            AND o."createdAt" <= ${endDate}
+            GROUP BY o.id, o."orderNumber", o."studentName", u.name, o."guestCustomerName", o."finalAmount", o."createdAt"
+            ORDER BY o."createdAt" DESC
+        ` as any[]
+
+        const studentOrders = studentOrdersRaw.map((row: any) => ({
+            id: row.id,
+            orderNumber: row.orderNumber,
+            studentName: row.studentName || '—',
+            parentName: row.parentName || '—',
+            products: row.products || '—',
+            finalAmount: Number(row.finalAmount || 0),
+            createdAt: row.createdAt
+        }))
+
         return NextResponse.json({
             summary: {
                 sales: {
@@ -285,7 +320,8 @@ export async function GET(request: NextRequest) {
             },
             topProducts: topProductsDetails,
             topCategories,
-            monthlyData
+            monthlyData,
+            studentOrders
         })
 
     } catch (error) {

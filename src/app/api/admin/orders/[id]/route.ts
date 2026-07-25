@@ -65,6 +65,7 @@ export async function GET(
                 shippingAddressId: true,
                 billingAddressId: true,
                 notes: true,
+                studentName: true,
                 createdAt: true,
                 updatedAt: true,
                 user: {

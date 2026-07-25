@@ -35,6 +35,15 @@ interface ReportData {
     sales: number
     orders: number
   }>
+  studentOrders: Array<{
+    id: string
+    orderNumber: string
+    studentName: string
+    parentName: string
+    products: string
+    finalAmount: number
+    createdAt: string
+  }>
 }
 
 export default function AdminReportsPage() {
@@ -127,6 +136,17 @@ export default function AdminReportsPage() {
         'Aylık Performans': [
           ['Ay', 'Sipariş', 'Ciro'],
           ...reportData.monthlyData.map(m => [m.month, m.orders.toString(), `₺${m.sales.toLocaleString('tr-TR')}`])
+        ],
+        'Öğrenci Bazlı Siparişler': [
+          ['Sipariş No', 'Öğrenci Adı', 'Veli / Müşteri', 'Ürünler', 'Tutar', 'Tarih'],
+          ...(reportData.studentOrders || []).map(s => [
+            s.orderNumber,
+            s.studentName,
+            s.parentName,
+            s.products,
+            `₺${s.finalAmount.toLocaleString('tr-TR')}`,
+            new Date(s.createdAt).toLocaleDateString('tr-TR')
+          ])
         ]
       }
 
@@ -298,6 +318,54 @@ export default function AdminReportsPage() {
               {reportData.topProducts.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-4 text-center text-gray-500">Veri bulunamadı</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Öğrenci Bazlı Liste */}
+      <div className="bg-white p-6 rounded-lg shadow-sm border">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-gray-900">Öğrenci Bazlı Siparişler</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Hangi öğrenci için alındığına göre liste</p>
+          </div>
+          <span className="text-sm text-gray-500">{(reportData.studentOrders || []).length} sipariş</span>
+        </div>
+        <div className="overflow-x-auto max-h-[32rem] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500 sticky top-0">
+              <tr>
+                <th className="px-4 py-2 text-left">Sipariş</th>
+                <th className="px-4 py-2 text-left">Öğrenci Adı</th>
+                <th className="px-4 py-2 text-left">Veli / Müşteri</th>
+                <th className="px-4 py-2 text-left">Ürünler</th>
+                <th className="px-4 py-2 text-right">Tutar</th>
+                <th className="px-4 py-2 text-right">Tarih</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {(reportData.studentOrders || []).map((row) => (
+                <tr key={row.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    <a href={`/admin/orders/${row.id}`} className="text-blue-600 hover:underline">
+                      #{row.orderNumber}
+                    </a>
+                  </td>
+                  <td className="px-4 py-3 font-medium text-gray-900">{row.studentName}</td>
+                  <td className="px-4 py-3 text-gray-600">{row.parentName}</td>
+                  <td className="px-4 py-3 text-gray-600 max-w-xs truncate" title={row.products}>{row.products}</td>
+                  <td className="px-4 py-3 text-right">₺{row.finalAmount.toLocaleString('tr-TR')}</td>
+                  <td className="px-4 py-3 text-right text-gray-500">
+                    {new Date(row.createdAt).toLocaleDateString('tr-TR')}
+                  </td>
+                </tr>
+              ))}
+              {(reportData.studentOrders || []).length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-4 text-center text-gray-500">Veri bulunamadı</td>
                 </tr>
               )}
             </tbody>
