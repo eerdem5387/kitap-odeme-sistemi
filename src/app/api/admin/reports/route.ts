@@ -261,12 +261,17 @@ export async function GET(request: NextRequest) {
         }))
 
         // Öğrenci bazlı sipariş listesi
+        // Not: guestCustomerName kolonu bazı ortamlarda yok; veli adı user + teslimat adresinden alınır
         const studentOrdersRaw = await prisma.$queryRaw`
             SELECT
                 o.id,
                 o."orderNumber",
                 o."studentName",
-                COALESCE(NULLIF(TRIM(u.name), ''), NULLIF(TRIM(o."guestCustomerName"), ''), '') as "parentName",
+                COALESCE(
+                    NULLIF(TRIM(u.name), ''),
+                    NULLIF(TRIM(CONCAT(COALESCE(sa."firstName", ''), ' ', COALESCE(sa."lastName", ''))), ''),
+                    ''
+                ) as "parentName",
                 CAST(o."finalAmount" AS FLOAT) as "finalAmount",
                 o."createdAt",
                 COALESCE(
@@ -275,13 +280,14 @@ export async function GET(request: NextRequest) {
                 ) as products
             FROM "orders" o
             LEFT JOIN "users" u ON u.id = o."userId"
+            LEFT JOIN "addresses" sa ON sa.id = o."shippingAddressId"
             LEFT JOIN "order_items" oi ON oi."orderId" = o.id
             LEFT JOIN "products" p ON p.id = oi."productId"
             WHERE o."paymentStatus" = 'COMPLETED'
             AND o.status <> 'CANCELLED'
             AND o."createdAt" >= ${startDate}
             AND o."createdAt" <= ${endDate}
-            GROUP BY o.id, o."orderNumber", o."studentName", u.name, o."guestCustomerName", o."finalAmount", o."createdAt"
+            GROUP BY o.id, o."orderNumber", o."studentName", u.name, sa."firstName", sa."lastName", o."finalAmount", o."createdAt"
             ORDER BY o."createdAt" DESC
         ` as any[]
 
