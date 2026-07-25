@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
                 order: {
                     select: {
                         orderNumber: true,
+                        studentName: true,
                         user: {
                             select: { name: true, email: true }
                         },
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
             createdAt: payment.createdAt.toISOString(),
             order: {
                 orderNumber: payment.order.orderNumber,
+                studentName: payment.order.studentName || null,
                 user: payment.order.user,
                 items: payment.order.items.map(item => ({
                     id: item.id,

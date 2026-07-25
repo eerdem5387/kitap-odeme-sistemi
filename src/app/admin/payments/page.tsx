@@ -3,8 +3,8 @@
 // KALICI ÇÖZÜM: Static generation'ı kapat
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
-import { CreditCard, DollarSign, TrendingUp, AlertCircle } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { CreditCard, DollarSign, TrendingUp, AlertCircle, Search, Filter } from 'lucide-react'
 
 interface Payment {
   id: string
@@ -15,6 +15,7 @@ interface Payment {
   createdAt: string
   order: {
     orderNumber: string
+    studentName?: string | null
     user: {
       name: string
       email: string
@@ -42,6 +43,11 @@ export default function AdminPaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [methodFilter, setMethodFilter] = useState('all')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   const fetchPayments = async () => {
     try {
@@ -83,6 +89,55 @@ export default function AdminPaymentsPage() {
   useEffect(() => {
     fetchPayments()
   }, [])
+
+  const filteredPayments = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    const start = startDate ? new Date(`${startDate}T00:00:00`) : null
+    const end = endDate ? new Date(`${endDate}T23:59:59.999`) : null
+
+    return payments.filter((payment) => {
+      if (statusFilter !== 'all' && payment.status !== statusFilter) return false
+      if (methodFilter !== 'all' && payment.method !== methodFilter) return false
+
+      const created = new Date(payment.createdAt)
+      if (start && created < start) return false
+      if (end && created > end) return false
+
+      if (!term) return true
+
+      const productNames = payment.order.items
+        .map((item) => item.product.name)
+        .join(' ')
+        .toLowerCase()
+      const customerName = (payment.order.user?.name || '').toLowerCase()
+      const customerEmail = (payment.order.user?.email || '').toLowerCase()
+      const orderNumber = (payment.order.orderNumber || '').toLowerCase()
+      const studentName = (payment.order.studentName || '').toLowerCase()
+
+      return (
+        productNames.includes(term) ||
+        customerName.includes(term) ||
+        customerEmail.includes(term) ||
+        orderNumber.includes(term) ||
+        studentName.includes(term)
+      )
+    })
+  }, [payments, searchTerm, statusFilter, methodFilter, startDate, endDate])
+
+  const clearFilters = () => {
+    setSearchTerm('')
+    setStatusFilter('all')
+    setMethodFilter('all')
+    setStartDate('')
+    setEndDate('')
+  }
+
+  const hasActiveFilters =
+    searchTerm.trim() !== '' ||
+    statusFilter !== 'all' ||
+    methodFilter !== 'all' ||
+    startDate !== '' ||
+    endDate !== ''
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -207,6 +262,87 @@ export default function AdminPaymentsPage() {
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-lg shadow-sm border space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-gray-700 font-medium">
+            <Filter className="h-4 w-4" />
+            Filtreler
+          </div>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Temizle
+            </button>
+          )}
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Öğrenci, müşteri, e-posta, ürün veya sipariş no ara..."
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="text-sm text-gray-600 block mb-1">Durum</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Tümü</option>
+              <option value="COMPLETED">Tamamlandı</option>
+              <option value="PENDING">Başarısız (Bekleyen)</option>
+              <option value="FAILED">Başarısız</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-sm text-gray-600 block mb-1">Yöntem</label>
+            <select
+              value={methodFilter}
+              onChange={(e) => setMethodFilter(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">Tümü</option>
+              <option value="CREDIT_CARD">Kredi Kartı</option>
+              <option value="BANK_TRANSFER">Banka Transferi</option>
+              <option value="CASH_ON_DELIVERY">Kapıda Ödeme</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-sm text-gray-600 block mb-1">Başlangıç</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-gray-600 block mb-1">Bitiş</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <p className="text-sm text-gray-500">
+          {filteredPayments.length} / {payments.length} ödeme gösteriliyor
+        </p>
+      </div>
+
       {/* Payments Table - Desktop */}
       <div className="bg-white rounded-lg shadow-sm border overflow-hidden hidden lg:block">
         <div className="overflow-x-auto">
@@ -214,10 +350,10 @@ export default function AdminPaymentsPage() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ödeme ID
+                  Ürün
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ürün
+                  Öğrenci Adı Soyadı
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Müşteri
@@ -237,17 +373,14 @@ export default function AdminPaymentsPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {payments && payments.length > 0 ? (
-                payments.map((payment) => (
+              {filteredPayments.length > 0 ? (
+                filteredPayments.map((payment) => (
                     <tr key={payment.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {payment.id.slice(0, 8)}...
-                      </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         <div className="max-w-xs">
                           {payment.order.items.length > 0 ? (
                             <div className="space-y-1">
-                              {payment.order.items.slice(0, 2).map((item, idx) => (
+                              {payment.order.items.slice(0, 2).map((item) => (
                                 <div key={item.id}>
                                   <span className="font-medium">{item.product.name}</span>
                                   {item.variation && item.variation.attributes.length > 0 && (
@@ -269,6 +402,9 @@ export default function AdminPaymentsPage() {
                             <span className="text-gray-500">Ürün bulunamadı</span>
                           )}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {payment.order.studentName?.trim() || '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -299,7 +435,7 @@ export default function AdminPaymentsPage() {
               ) : (
                 <tr>
                   <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
-                    Henüz ödeme bulunmuyor.
+                    {hasActiveFilters ? 'Filtrelere uygun ödeme bulunamadı.' : 'Henüz ödeme bulunmuyor.'}
                   </td>
                 </tr>
               )}
@@ -310,8 +446,8 @@ export default function AdminPaymentsPage() {
 
       {/* Payments Card View - Mobile */}
       <div className="lg:hidden space-y-3">
-        {payments && payments.length > 0 ? (
-          payments.map((payment) => (
+        {filteredPayments.length > 0 ? (
+          filteredPayments.map((payment) => (
             <div key={payment.id} className="bg-white rounded-lg shadow-sm border p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1 min-w-0">
@@ -344,6 +480,9 @@ export default function AdminPaymentsPage() {
                       </h3>
                     )}
                   </div>
+                  <p className="text-xs text-gray-500 truncate">
+                    Öğrenci: {payment.order.studentName?.trim() || '—'}
+                  </p>
                   <p className="text-xs text-gray-500 truncate">{payment.order.user.name}</p>
                   <p className="text-xs text-gray-500 truncate">{payment.order.user.email}</p>
                 </div>
@@ -352,7 +491,7 @@ export default function AdminPaymentsPage() {
                 </span>
               </div>
               
-              <div className="grid grid-cols-2 gap-3 mb-3 pt-3 border-t border-gray-200">
+              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Tutar</p>
                   <p className="text-sm font-semibold text-gray-900">₺{payment.amount.toLocaleString('tr-TR')}</p>
@@ -365,19 +504,15 @@ export default function AdminPaymentsPage() {
                   <p className="text-xs text-gray-500 mb-1">Tarih</p>
                   <p className="text-sm text-gray-900">{new Date(payment.createdAt).toLocaleDateString('tr-TR')}</p>
                 </div>
-                <div className="col-span-2">
-                  <p className="text-xs text-gray-500 mb-1">Ödeme ID</p>
-                  <p className="text-xs font-mono text-gray-600">{payment.id.slice(0, 8)}...</p>
-                </div>
               </div>
             </div>
           ))
         ) : (
           <div className="bg-white rounded-lg shadow-sm border p-6 text-center text-gray-500">
-            Henüz ödeme bulunmuyor.
+            {hasActiveFilters ? 'Filtrelere uygun ödeme bulunamadı.' : 'Henüz ödeme bulunmuyor.'}
           </div>
         )}
       </div>
     </div>
   )
-} 
+}
