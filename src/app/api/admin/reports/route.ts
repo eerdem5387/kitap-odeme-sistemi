@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
 
         // Özel tarih filtresi varsa onu kullan
         if (startDateParam && endDateParam) {
-            startDate = new Date(startDateParam)
-            endDate = new Date(endDateParam)
+            startDate = new Date(`${startDateParam}T00:00:00`)
+            endDate = new Date(`${endDateParam}T23:59:59.999`)
             // Karşılaştırma için aynı süre kadar geriye git
             const duration = endDate.getTime() - startDate.getTime()
             previousStartDate = new Date(startDate.getTime() - duration)
@@ -191,6 +191,7 @@ export async function GET(request: NextRequest) {
         const topProductsDetails = soldProducts.map((item) => {
             const product = productMap.get(item.productId)
             return {
+                id: item.productId,
                 name: product?.name || 'Bilinmeyen Ürün',
                 category: product?.category?.name || '-',
                 sales: item._sum.quantity || 0,

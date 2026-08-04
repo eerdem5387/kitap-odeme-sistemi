@@ -20,6 +20,7 @@ interface ReportData {
     averageOrder: { current: number; previous: number; change: string }
   }
   topProducts: Array<{
+    id: string
     name: string
     sales: number
     revenue: number
@@ -53,10 +54,11 @@ export default function AdminReportsPage() {
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportingProductId, setExportingProductId] = useState<string | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [reportData, setReportData] = useState<ReportData | null>(null)
 
-  // Kategorileri yükle
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -72,7 +74,6 @@ export default function AdminReportsPage() {
     fetchCategories()
   }, [])
 
-  // Rapor verilerini yükle
   useEffect(() => {
     const fetchReport = async () => {
       setIsLoading(true)
@@ -83,7 +84,6 @@ export default function AdminReportsPage() {
           return
         }
 
-        // Parametreleri oluştur
         const params = new URLSearchParams()
         params.append('period', selectedPeriod)
         if (selectedCategory !== 'all') params.append('categoryId', selectedCategory)
@@ -97,12 +97,11 @@ export default function AdminReportsPage() {
         })
 
         if (!res.ok) {
-            // Eğer yetki hatası ise login'e at
-            if (res.status === 401 || res.status === 403) {
-                router.push('/login?redirect=/admin/reports')
-                return
-            }
-            throw new Error('Rapor yüklenemedi')
+          if (res.status === 401 || res.status === 403) {
+            router.push('/login?redirect=/admin/reports')
+            return
+          }
+          throw new Error('Rapor yüklenemedi')
         }
 
         const data = await res.json()
@@ -117,60 +116,56 @@ export default function AdminReportsPage() {
     fetchReport()
   }, [selectedPeriod, selectedCategory, startDate, endDate, router])
 
-  const exportToExcel = () => {
-    if (!reportData) return
-
+  const downloadExport = async (productId?: string, productName?: string) => {
     try {
-      const excelData: Record<string, string[][]> = {
-        'Özet': [
-          ['Metrik', 'Değer', 'Değişim'],
-          ['Toplam Satış', `₺${reportData.summary.sales.current.toLocaleString('tr-TR')}`, reportData.summary.sales.change],
-          ['Toplam Sipariş', reportData.summary.orders.current.toString(), reportData.summary.orders.change],
-          ['Yeni Müşteri', reportData.summary.customers.current.toString(), reportData.summary.customers.change],
-          ['Ortalama Sepet', `₺${reportData.summary.averageOrder.current.toLocaleString('tr-TR')}`, reportData.summary.averageOrder.change]
-        ],
-        'Satılan Ürünler': [
-          ['Ürün', 'Kategori', 'Adet', 'Gelir'],
-          ...reportData.topProducts.map(p => [p.name, p.category, p.sales.toString(), `₺${p.revenue.toLocaleString('tr-TR')}`])
-        ],
-        'Aylık Performans': [
-          ['Ay', 'Sipariş', 'Ciro'],
-          ...reportData.monthlyData.map(m => [m.month, m.orders.toString(), `₺${m.sales.toLocaleString('tr-TR')}`])
-        ],
-        'Öğrenci Bazlı Siparişler': [
-          ['Sipariş No', 'Öğrenci Adı', 'Veli / Müşteri', 'Ürünler', 'Tutar', 'Tarih'],
-          ...(reportData.studentOrders || []).map(s => [
-            s.orderNumber,
-            s.studentName,
-            s.parentName,
-            s.products,
-            `₺${s.finalAmount.toLocaleString('tr-TR')}`,
-            new Date(s.createdAt).toLocaleDateString('tr-TR')
-          ])
-        ]
+      if (productId) setExportingProductId(productId)
+      else setIsExporting(true)
+
+      const token = localStorage.getItem('token')
+      if (!token) {
+        router.push('/login?redirect=/admin/reports')
+        return
       }
 
-      // CSV formatına çevir (basitleştirilmiş export)
-      let csvContent = "data:text/csv;charset=utf-8,"
-      
-      Object.entries(excelData).forEach(([sheetName, rows]) => {
-        csvContent += `\n--- ${sheetName} ---\n`
-        rows.forEach(row => {
-            csvContent += row.join(";") + "\n"
-        })
+      const params = new URLSearchParams()
+      params.append('period', selectedPeriod)
+      if (startDate) params.append('startDate', startDate)
+      if (endDate) params.append('endDate', endDate)
+      if (productId) params.append('productId', productId)
+
+      const res = await fetch(`/api/admin/reports/export?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
       })
 
-      const encodedUri = encodeURI(csvContent)
-      const link = document.createElement("a")
-      link.setAttribute("href", encodedUri)
-      link.setAttribute("download", `rapor_${new Date().toISOString().split('T')[0]}.csv`)
+      if (!res.ok) {
+        throw new Error('İndirme başarısız')
+      }
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const datePart = startDate && endDate
+        ? `${startDate}_${endDate}`
+        : new Date().toISOString().slice(0, 10)
+      const safeName = (productName || 'tum-urunler')
+        .toLocaleLowerCase('tr-TR')
+        .replace(/[^a-z0-9ğüşıöç\s-]/gi, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .slice(0, 40) || 'rapor'
+
+      link.href = url
+      link.download = `rapor_${safeName}_${datePart}.csv`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-
+      window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Export error:', error)
       alert('Rapor indirilirken hata oluştu')
+    } finally {
+      setIsExporting(false)
+      setExportingProductId(null)
     }
   }
 
@@ -186,7 +181,6 @@ export default function AdminReportsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Raporlar</h1>
@@ -206,16 +200,16 @@ export default function AdminReportsPage() {
           </select>
           
           <button 
-            onClick={exportToExcel}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            onClick={() => downloadExport()}
+            disabled={isExporting}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-60"
           >
             <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">İndir</span>
+            <span className="hidden sm:inline">{isExporting ? 'İndiriliyor...' : 'Excel İndir'}</span>
           </button>
         </div>
       </div>
 
-      {/* Filtreler */}
       <div className="bg-white p-4 rounded-lg shadow-sm border">
         <div className="flex items-center gap-2 mb-4 text-gray-700 font-medium">
             <Filter className="h-4 w-4" />
@@ -254,9 +248,12 @@ export default function AdminReportsPage() {
                 />
             </div>
         </div>
+        <p className="text-xs text-gray-500 mt-3">
+          Excel indirme seçili tarih aralığına göre hazırlanır. Tarih boşsa üstteki dönem filtresi kullanılır.
+          Dosyada yalnızca öğrenci adı, ürün, işlem tarihi ve ürün bazlı satış adedi yer alır.
+        </p>
       </div>
 
-      {/* Özet Kartları */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard 
             title="Toplam Satış" 
@@ -288,10 +285,12 @@ export default function AdminReportsPage() {
         />
       </div>
 
-      {/* Satılan Ürünler */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-900">Satılan Ürünler</h3>
+          <div>
+            <h3 className="font-semibold text-gray-900">Satılan Ürünler</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Her ürün için özel Excel indirebilirsiniz</p>
+          </div>
           <span className="text-sm text-gray-500">{reportData.topProducts.length} ürün</span>
         </div>
         <div className="overflow-x-auto max-h-[32rem] overflow-y-auto">
@@ -303,21 +302,36 @@ export default function AdminReportsPage() {
                 <th className="px-4 py-2 text-left">Kategori</th>
                 <th className="px-4 py-2 text-right">Adet</th>
                 <th className="px-4 py-2 text-right">Gelir</th>
+                <th className="px-4 py-2 text-right">Excel</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {reportData.topProducts.map((product, idx) => (
-                <tr key={idx}>
+                <tr key={product.id || idx}>
                   <td className="px-4 py-3 text-gray-500">{idx + 1}</td>
                   <td className="px-4 py-3 font-medium text-gray-900">{product.name}</td>
                   <td className="px-4 py-3 text-gray-600">{product.category}</td>
                   <td className="px-4 py-3 text-right">{product.sales}</td>
                   <td className="px-4 py-3 text-right">₺{product.revenue.toLocaleString('tr-TR')}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => downloadExport(product.id, product.name)}
+                      disabled={!product.id || exportingProductId === product.id}
+                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      title={`${product.name} için Excel indir`}
+                    >
+                      <Download className="h-4 w-4" />
+                      <span className="hidden sm:inline">
+                        {exportingProductId === product.id ? '...' : 'İndir'}
+                      </span>
+                    </button>
+                  </td>
                 </tr>
               ))}
               {reportData.topProducts.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-4 text-center text-gray-500">Veri bulunamadı</td>
+                  <td colSpan={6} className="px-4 py-4 text-center text-gray-500">Veri bulunamadı</td>
                 </tr>
               )}
             </tbody>
@@ -325,7 +339,6 @@ export default function AdminReportsPage() {
         </div>
       </div>
 
-      {/* Öğrenci Bazlı Liste */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -373,7 +386,6 @@ export default function AdminReportsPage() {
         </div>
       </div>
 
-      {/* Kategori Performansı */}
       <div className="bg-white p-6 rounded-lg shadow-sm border">
         <h3 className="font-semibold text-gray-900 mb-4">En İyi Kategoriler</h3>
         <div className="space-y-4">
