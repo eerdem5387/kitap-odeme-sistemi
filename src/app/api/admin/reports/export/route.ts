@@ -6,6 +6,20 @@ function escCsv(value: unknown) {
     return `"${String(value ?? '').replace(/"/g, '""')}"`
 }
 
+function asciiFilename(name: string) {
+    return name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
+        .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+        .replace(/Ğ/g, 'G').replace(/Ü/g, 'U').replace(/Ş/g, 'S')
+        .replace(/İ/g, 'I').replace(/Ö/g, 'O').replace(/Ç/g, 'C')
+        .replace(/[^a-zA-Z0-9._-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 80) || 'rapor'
+}
+
 function resolveDateRange(searchParams: URLSearchParams) {
     const period = searchParams.get('period') || 'month'
     const startDateParam = searchParams.get('startDate')
@@ -57,113 +71,92 @@ export async function GET(request: NextRequest) {
         }
 
         const { searchParams } = new URL(request.url)
-        const productId = searchParams.get('productId')
+        const productId = searchParams.get('productId') || undefined
         const { startDate, endDate } = resolveDateRange(searchParams)
 
-        const detailRows = productId
-            ? await prisma.$queryRaw`
-                SELECT
-                    COALESCE(NULLIF(TRIM(o."studentName"), ''), '—') as "studentName",
-                    COALESCE(p.name, 'Bilinmeyen Ürün') as "productName",
-                    o."createdAt" as "createdAt",
-                    CAST(oi.quantity AS INTEGER) as quantity
-                FROM "order_items" oi
-                JOIN "orders" o ON o.id = oi."orderId"
-                LEFT JOIN "products" p ON p.id = oi."productId"
-                WHERE o."paymentStatus" = 'COMPLETED'
-                AND o.status <> 'CANCELLED'
-                AND o."createdAt" >= ${startDate}
-                AND o."createdAt" <= ${endDate}
-                AND oi."productId" = ${productId}
-                ORDER BY o."createdAt" DESC, "studentName" ASC
-            ` as Array<{ studentName: string; productName: string; createdAt: Date; quantity: number }>
-            : await prisma.$queryRaw`
-                SELECT
-                    COALESCE(NULLIF(TRIM(o."studentName"), ''), '—') as "studentName",
-                    COALESCE(p.name, 'Bilinmeyen Ürün') as "productName",
-                    o."createdAt" as "createdAt",
-                    CAST(oi.quantity AS INTEGER) as quantity
-                FROM "order_items" oi
-                JOIN "orders" o ON o.id = oi."orderId"
-                LEFT JOIN "products" p ON p.id = oi."productId"
-                WHERE o."paymentStatus" = 'COMPLETED'
-                AND o.status <> 'CANCELLED'
-                AND o."createdAt" >= ${startDate}
-                AND o."createdAt" <= ${endDate}
-                ORDER BY o."createdAt" DESC, "productName" ASC, "studentName" ASC
-            ` as Array<{ studentName: string; productName: string; createdAt: Date; quantity: number }>
+        const items = await prisma.orderItem.findMany({
+            where: {
+                ...(productId ? { productId } : {}),
+                order: {
+                    paymentStatus: 'COMPLETED',
+                    status: { not: 'CANCELLED' },
+                    createdAt: {
+                        gte: startDate,
+                        lte: endDate
+                    }
+                }
+            },
+            select: {
+                quantity: true,
+                product: { select: { id: true, name: true } },
+                order: {
+                    select: {
+                        studentName: true,
+                        createdAt: true
+                    }
+                }
+            },
+            orderBy: [
+                { order: { createdAt: 'desc' } }
+            ]
+        })
 
-        const productSummary = productId
-            ? await prisma.$queryRaw`
-                SELECT
-                    COALESCE(p.name, 'Bilinmeyen Ürün') as name,
-                    CAST(SUM(oi.quantity) AS INTEGER) as sales
-                FROM "order_items" oi
-                JOIN "orders" o ON o.id = oi."orderId"
-                LEFT JOIN "products" p ON p.id = oi."productId"
-                WHERE o."paymentStatus" = 'COMPLETED'
-                AND o.status <> 'CANCELLED'
-                AND o."createdAt" >= ${startDate}
-                AND o."createdAt" <= ${endDate}
-                AND oi."productId" = ${productId}
-                GROUP BY p.name
-                ORDER BY sales DESC
-            ` as Array<{ name: string; sales: number }>
-            : await prisma.$queryRaw`
-                SELECT
-                    COALESCE(p.name, 'Bilinmeyen Ürün') as name,
-                    CAST(SUM(oi.quantity) AS INTEGER) as sales
-                FROM "order_items" oi
-                JOIN "orders" o ON o.id = oi."orderId"
-                LEFT JOIN "products" p ON p.id = oi."productId"
-                WHERE o."paymentStatus" = 'COMPLETED'
-                AND o.status <> 'CANCELLED'
-                AND o."createdAt" >= ${startDate}
-                AND o."createdAt" <= ${endDate}
-                GROUP BY p.name
-                ORDER BY sales DESC
-            ` as Array<{ name: string; sales: number }>
+        const detailRows = items.map((item) => ({
+            studentName: item.order.studentName?.trim() || '—',
+            productName: item.product?.name || 'Bilinmeyen Ürün',
+            createdAt: item.order.createdAt,
+            quantity: item.quantity
+        }))
+
+        const salesByProduct = new Map<string, number>()
+        for (const row of detailRows) {
+            salesByProduct.set(
+                row.productName,
+                (salesByProduct.get(row.productName) || 0) + Number(row.quantity || 0)
+            )
+        }
+        const productSummary = Array.from(salesByProduct.entries())
+            .map(([name, sales]) => ({ name, sales }))
+            .sort((a, b) => b.sales - a.sales)
 
         const lines: string[] = []
         lines.push('"Öğrenci Adı";"Satın Alınan Ürün";"İşlem Tarihi"')
-        for (const row of detailRows) {
-            // quantity > 1 ise aynı öğrenci için satırları çoğaltmak yerine ürün adında adet belirt
-            const productLabel =
-                Number(row.quantity) > 1
-                    ? `${row.productName} (x${row.quantity})`
-                    : row.productName
-            lines.push(
-                [
-                    escCsv(row.studentName),
-                    escCsv(productLabel),
-                    escCsv(new Date(row.createdAt).toLocaleDateString('tr-TR'))
-                ].join(';')
-            )
+
+        if (detailRows.length === 0) {
+            lines.push('"—";"Veri bulunamadı";"—"')
+        } else {
+            for (const row of detailRows) {
+                const productLabel =
+                    Number(row.quantity) > 1
+                        ? `${row.productName} (x${row.quantity})`
+                        : row.productName
+                lines.push(
+                    [
+                        escCsv(row.studentName),
+                        escCsv(productLabel),
+                        escCsv(new Date(row.createdAt).toLocaleDateString('tr-TR'))
+                    ].join(';')
+                )
+            }
         }
 
         lines.push('')
         lines.push('"Ürün Bazlı Satış Adedi"')
         lines.push('"Ürün";"Satış Adedi"')
-        for (const row of productSummary) {
-            lines.push([escCsv(row.name), escCsv(Number(row.sales || 0))].join(';'))
+        if (productSummary.length === 0) {
+            lines.push('"—";"0"')
+        } else {
+            for (const row of productSummary) {
+                lines.push([escCsv(row.name), escCsv(row.sales)].join(';'))
+            }
         }
 
-        if (detailRows.length === 0) {
-            lines.splice(1, 0, '"—";"Veri bulunamadı";"—"')
-        }
-
-        const productSlug = productId && detailRows[0]?.productName
-            ? detailRows[0].productName
-                .toLocaleLowerCase('tr-TR')
-                .replace(/[^a-z0-9ğüşıöç\s-]/gi, '')
-                .trim()
-                .replace(/\s+/g, '-')
-                .slice(0, 40)
+        const productLabelForFile = productId
+            ? (detailRows[0]?.productName || productId)
             : 'tum-urunler'
-
         const startLabel = startDate.toISOString().slice(0, 10)
         const endLabel = endDate.toISOString().slice(0, 10)
-        const filename = `rapor_${productSlug}_${startLabel}_${endLabel}.csv`
+        const filename = asciiFilename(`rapor_${productLabelForFile}_${startLabel}_${endLabel}.csv`)
 
         const csv = '\uFEFF' + lines.join('\n') + '\n'
 
@@ -176,6 +169,10 @@ export async function GET(request: NextRequest) {
         })
     } catch (error) {
         console.error('Report export error:', error)
-        return NextResponse.json({ error: 'Rapor indirilirken hata oluştu' }, { status: 500 })
+        const message = error instanceof Error ? error.message : 'Rapor indirilirken hata oluştu'
+        return NextResponse.json(
+            { error: 'Rapor indirilirken hata oluştu', detail: message },
+            { status: 500 }
+        )
     }
 }

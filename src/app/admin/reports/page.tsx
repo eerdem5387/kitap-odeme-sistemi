@@ -138,7 +138,8 @@ export default function AdminReportsPage() {
       })
 
       if (!res.ok) {
-        throw new Error('İndirme başarısız')
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || err.error || 'İndirme başarısız')
       }
 
       const blob = await res.blob()
@@ -162,7 +163,7 @@ export default function AdminReportsPage() {
       window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Export error:', error)
-      alert('Rapor indirilirken hata oluştu')
+      alert(error instanceof Error ? error.message : 'Rapor indirilirken hata oluştu')
     } finally {
       setIsExporting(false)
       setExportingProductId(null)
