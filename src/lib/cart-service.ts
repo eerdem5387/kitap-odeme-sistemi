@@ -105,12 +105,12 @@ class CartService {
         return itemId === uniqueId
     })
 
+    const maxStock = variation ? Number(variation.stock) : Number(product.stock)
+    const isUnlimited = maxStock === -1
+
     if (existingItemIndex > -1) {
-      // Update existing item
       const newQuantity = cart.items[existingItemIndex].quantity + quantity
-      // Stok kontrolü (Basit)
-      const maxStock = variation ? variation.stock : product.stock
-      if (newQuantity <= maxStock) {
+      if (isUnlimited || newQuantity <= maxStock) {
           cart.items[existingItemIndex].quantity = newQuantity
       } else {
           cart.items[existingItemIndex].quantity = maxStock
@@ -125,7 +125,7 @@ class CartService {
         price: variation ? Number(variation.price) : Number(product.price),
         image: (variation?.images && variation.images[0]) || (product.images && product.images[0]) || '',
         quantity: quantity,
-        stock: variation ? variation.stock : product.stock,
+        stock: isUnlimited ? -1 : maxStock,
         variationOptions: variation ? this.formatVariationOptions(variation) : undefined
       }
       cart.items.push(cartItem)
@@ -151,13 +151,14 @@ class CartService {
         if (variationId) {
             return item.id === itemId && item.variationId === variationId
         }
-        return item.id === itemId
+        return item.id === itemId && !item.variationId
     })
 
     if (itemIndex > -1) {
       if (quantity > 0) {
-        // Stok kontrolü
-        if (quantity <= cart.items[itemIndex].stock) {
+        const stock = Number(cart.items[itemIndex].stock)
+        const isUnlimited = stock === -1
+        if (isUnlimited || quantity <= stock) {
             cart.items[itemIndex].quantity = quantity
         }
       } else {

@@ -199,9 +199,9 @@ export default function CartPage() {
                         <span className="w-10 sm:w-12 text-center font-bold text-gray-900 text-sm sm:text-base">{item.quantity}</span>
                     <button
                       onClick={() => updateQuantity(item.id, item.quantity + 1, item.variationId)}
-                          className="p-2 sm:p-2.5 rounded-r-lg hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+                          className="p-2 sm:p-2.5 rounded-r-lg hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                           aria-label="Artır"
-                          disabled={item.quantity >= item.stock}
+                          disabled={item.stock !== -1 && item.quantity >= item.stock}
                     >
                       <Plus className="h-4 w-4 text-gray-600" />
                     </button>
