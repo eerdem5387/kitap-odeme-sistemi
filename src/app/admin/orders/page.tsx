@@ -61,7 +61,7 @@ interface Order {
 
 const TABS = [
   { id: 'all', label: 'Tümü' },
-  { id: 'PENDING', label: 'Başarısız' },
+  { id: 'PENDING', label: 'Beklemede' },
   { id: 'CONFIRMED', label: 'Onaylanan' },
   { id: 'SHIPPED', label: 'Kargoda' },
   { id: 'DELIVERED', label: 'Teslim Edilen' },
@@ -155,16 +155,21 @@ export default function AdminOrdersPage() {
 
   // Status Badge Component
   const StatusBadge = ({ status, type = 'order' }: { status: string, type?: 'order' | 'payment' }) => {
-    const config = {
-      PENDING: { color: 'bg-red-50 text-red-700 border-red-100', icon: AlertCircle, label: 'Başarısız' },
+    const orderConfig = {
+      PENDING: { color: 'bg-amber-50 text-amber-700 border-amber-100', icon: Clock, label: 'Beklemede' },
       CONFIRMED: { color: 'bg-blue-50 text-blue-700 border-blue-100', icon: CheckCircle2, label: 'Onaylandı' },
       SHIPPED: { color: 'bg-purple-50 text-purple-700 border-purple-100', icon: Truck, label: 'Kargoda' },
       DELIVERED: { color: 'bg-green-50 text-green-700 border-green-100', icon: Package, label: 'Teslim Edildi' },
       CANCELLED: { color: 'bg-red-50 text-red-700 border-red-100', icon: XCircle, label: 'İptal' },
+    }
+
+    const paymentConfig = {
+      PENDING: { color: 'bg-amber-50 text-amber-700 border-amber-100', icon: Clock, label: 'Ödeme Bekleniyor' },
       COMPLETED: { color: 'bg-green-50 text-green-700 border-green-100', icon: CheckCircle2, label: 'Ödendi' },
       FAILED: { color: 'bg-red-50 text-red-700 border-red-100', icon: AlertCircle, label: 'Başarısız' }
     }
 
+    const config = type === 'payment' ? paymentConfig : orderConfig
     const statusKey = status as keyof typeof config
     const style = config[statusKey] || { color: 'bg-gray-50 text-gray-700', icon: Clock, label: status }
     const Icon = style.icon

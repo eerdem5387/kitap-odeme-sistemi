@@ -144,7 +144,7 @@ export default function AdminPaymentsPage() {
       case 'COMPLETED':
         return 'bg-green-100 text-green-800'
       case 'PENDING':
-        return 'bg-red-100 text-red-800'
+        return 'bg-amber-100 text-amber-800'
       case 'FAILED':
         return 'bg-red-100 text-red-800'
       default:
@@ -154,12 +154,12 @@ export default function AdminPaymentsPage() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'COMPLETED':
-        return 'Tamamlandı'
       case 'PENDING':
-        return 'Başarısız'
+        return 'Ödeme Bekleniyor'
       case 'FAILED':
         return 'Başarısız'
+      case 'COMPLETED':
+        return 'Tamamlandı'
       default:
         return status
     }
@@ -301,7 +301,7 @@ export default function AdminPaymentsPage() {
             >
               <option value="all">Tümü</option>
               <option value="COMPLETED">Tamamlandı</option>
-              <option value="PENDING">Başarısız (Bekleyen)</option>
+              <option value="PENDING">Ödeme Bekleniyor</option>
               <option value="FAILED">Başarısız</option>
             </select>
           </div>

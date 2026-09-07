@@ -584,7 +584,11 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
                       ? 'bg-green-100 text-green-800' 
                       : 'bg-red-100 text-red-800'
                   }`}>
-                    {order.paymentStatus === 'COMPLETED' ? 'Ödendi' : 'Başarısız'}
+                    {order.paymentStatus === 'COMPLETED'
+                      ? 'Ödendi'
+                      : order.paymentStatus === 'FAILED'
+                        ? 'Başarısız'
+                        : 'Ödeme Bekleniyor'}
                   </span>
                   {order.failureReason && order.paymentStatus !== 'COMPLETED' && (
                     <p className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-md px-2 py-1">
