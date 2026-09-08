@@ -165,6 +165,31 @@ export default function CheckoutPage() {
     try {
       const token = localStorage.getItem('token')
 
+      // Aynı sepet için bekleyen ödeme varsa yeni sipariş açma
+      try {
+        const pendingId = sessionStorage.getItem('pendingPaymentOrderId')
+        if (pendingId) {
+          const guestEmail = localStorage.getItem('userEmail') || customerEmail || ''
+          const checkUrl = token
+            ? `/api/orders/${pendingId}`
+            : `/api/orders/${pendingId}?guest=${encodeURIComponent(guestEmail)}`
+          const checkRes = await fetch(checkUrl, {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            cache: 'no-store'
+          })
+          if (checkRes.ok) {
+            const pendingOrder = await checkRes.json()
+            if (pendingOrder?.paymentStatus === 'PENDING' || pendingOrder?.paymentStatus === 'FAILED') {
+              router.push(`/payment/${pendingId}`)
+              return
+            }
+            if (pendingOrder?.paymentStatus === 'COMPLETED') {
+              sessionStorage.removeItem('pendingPaymentOrderId')
+            }
+          }
+        }
+      } catch {}
+
       const orderData: any = {
         items: cartItems.map(item => ({
           productId: String(item.id),
@@ -240,6 +265,10 @@ export default function CheckoutPage() {
           localStorage.setItem('userPhone', shippingAddress.phone || '')
         } catch {}
       }
+
+      try {
+        sessionStorage.setItem('pendingPaymentOrderId', order.id)
+      } catch {}
       
       router.push(`/payment/${order.id}`)
     } catch (error: any) {

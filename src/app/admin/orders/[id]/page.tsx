@@ -175,6 +175,41 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
     }
   }
 
+  const handleMarkPaid = async () => {
+    if (!order) return
+    if (!confirm('Bu siparişi Ziraat panelinde başarılı görüldüğü için ÖDENDİ olarak işaretlemek istiyor musunuz?')) {
+      return
+    }
+    setIsUpdating(true)
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) throw new Error('Yetkilendirme gerekli')
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          markPaid: true,
+          status: 'CONFIRMED',
+          notes: editedNotes || order.notes || ''
+        })
+      })
+      if (!response.ok) throw new Error('Ödeme işaretlenemedi')
+      const updatedOrder = await response.json()
+      setOrder(updatedOrder)
+      setEditedStatus(updatedOrder.status)
+      setEditedNotes(updatedOrder.notes || '')
+      alert('Sipariş ödendi olarak işaretlendi')
+    } catch (error) {
+      console.error(error)
+      alert('Ödeme işaretlenirken hata oluştu')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PENDING':
@@ -343,13 +378,25 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center"
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Düzenle
-              </button>
+              <>
+                {order.paymentStatus !== 'COMPLETED' && (
+                  <button
+                    onClick={handleMarkPaid}
+                    disabled={isUpdating}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center disabled:opacity-60"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Ödendi İşaretle
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Düzenle
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -371,7 +418,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
                       onChange={(e) => setEditedStatus(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="PENDING">Başarısız</option>
+                      <option value="PENDING">Beklemede</option>
                       <option value="CONFIRMED">Onaylandı</option>
                       <option value="SHIPPED">Kargoda</option>
                       <option value="DELIVERED">Teslim Edildi</option>

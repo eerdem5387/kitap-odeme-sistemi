@@ -198,6 +198,33 @@ export default function AdminOrdersPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Sipariş Yönetimi</h1>
           <p className="text-gray-500 mt-1">Toplam {filteredOrders.length} sipariş</p>
         </div>
+        <button
+          type="button"
+          onClick={async () => {
+            if (!confirm('Başarılı ödemesi olan mükerrer bekleyen siparişler iptal edilsin mi?')) return
+            try {
+              const token = localStorage.getItem('token')
+              if (!token) return
+              const res = await fetch('/api/admin/payments/reconcile', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ mode: 'cleanup_retries' })
+              })
+              const data = await res.json()
+              if (!res.ok) throw new Error(data.error || 'İşlem başarısız')
+              alert(`Temizlendi: ${data.cancelledCount || 0} mükerrer bekleyen sipariş`)
+              window.location.reload()
+            } catch (e: any) {
+              alert(e?.message || 'Temizlik hatası')
+            }
+          }}
+          className="px-4 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 text-gray-700"
+        >
+          Mükerrer bekleyenleri temizle
+        </button>
       </div>
 
       {fetchError && (

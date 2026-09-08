@@ -239,7 +239,7 @@ export default function AdminPaymentsPage() {
               <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-red-600" />
             </div>
             <div className="sm:ml-3 lg:ml-4 flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-medium text-gray-600">Başarısız</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-600">Ödeme Bekleniyor</p>
               <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">
                 {payments.filter(p => p.status === 'PENDING').length}
               </p>

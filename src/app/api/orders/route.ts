@@ -85,17 +85,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const authHeader = request.headers.get('authorization')
-        let userId: string | null = null
 
         // Try to authenticate; if fails, continue as guest
+        let authenticatedUserId: string | null = null
         try {
             if (authHeader) {
                 const user = requireAuth(authHeader)
-                userId = user.userId
+                authenticatedUserId = user.userId
             }
         } catch {
-            userId = null
+            authenticatedUserId = null
         }
+
+        let userId: string | null = authenticatedUserId
 
         const body = await request.json()
 
@@ -115,7 +117,6 @@ export async function POST(request: NextRequest) {
             }
             // Upsert guest user by email
             const nameParts = (customerName || `${shippingAddress.firstName} ${shippingAddress.lastName}`).trim()
-            const [first, ...rest] = nameParts.split(' ')
             const displayName = nameParts || 'Müşteri'
 
             // Aynı e-posta farklı kişiler için kullanılsa bile User kaydını güncelleme;
@@ -234,7 +235,7 @@ export async function POST(request: NextRequest) {
         const shippingAddressRecord = await findOrCreateAddress(shippingAddress)
         const billingAddressRecord = await findOrCreateAddress(finalBillingAddress)
 
-        const isGuestOrder = !userId && !!customerEmail
+        const isGuestOrder = !authenticatedUserId && !!customerEmail
         const guestData = isGuestOrder ? {
             guestCustomerEmail: customerEmail,
             guestCustomerName: (customerName || `${shippingAddress.firstName} ${shippingAddress.lastName}`).trim()

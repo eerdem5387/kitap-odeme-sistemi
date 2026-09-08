@@ -128,7 +128,7 @@ export function resolveOrderFailureReason(input: {
   }
 
   if (input.paymentStatus === 'PENDING') {
-    return 'Ödeme tamamlanmadı (müşteri banka sayfasından dönmedi veya işlemi iptal etti)'
+    return 'Banka sonucu siteye ulaşmadı (callback alınamadı). Ziraat panelinden kontrol edin.'
   }
 
   return null

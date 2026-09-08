@@ -5,6 +5,9 @@ interface ZiraatPaymentSettings {
   merchantId: string
   storeKey: string
   posUrl: string // API endpoint URL
+  apiUrl?: string
+  provUsername?: string
+  provPassword?: string
   storeType: string
   testMode: boolean
 }
@@ -15,6 +18,8 @@ interface PaymentRequest {
   orderNumber?: string
   successUrl: string
   failUrl: string
+  /** NestPay server-to-server bildirim URL'i (redirect değil, APPROVED bekler) */
+  callbackUrl?: string
   installments?: string // Taksit sayısı (boş ise tek çekim)
   customerEmail?: string
   customerName?: string
@@ -68,6 +73,9 @@ class ZiraatPaymentService {
         // Öncelik: ziraat3dUrl (est3Dgate). Eğer bu yoksa, eski konfig'e uyum için ziraatApiUrl'i fallback olarak kullanıyoruz.
         if (dbKey === 'payment.ziraat3dUrl') settings.posUrl = setting.value
         if (!settings.posUrl && dbKey === 'payment.ziraatApiUrl') settings.posUrl = setting.value
+        if (dbKey === 'payment.ziraatApiUrl') settings.apiUrl = setting.value
+        if (dbKey === 'payment.ziraatProvUsername') settings.provUsername = setting.value
+        if (dbKey === 'payment.ziraatProvPassword') settings.provPassword = setting.value
         if (dbKey === 'payment.ziraatStoreType') settings.storeType = setting.value
         if (dbKey === 'payment.ziraatTestMode') settings.testMode = setting.value === 'true'
         
@@ -96,6 +104,9 @@ class ZiraatPaymentService {
         merchantId: settings.merchantId,
         storeKey: settings.storeKey,
         posUrl: settings.posUrl,
+        apiUrl: settings.apiUrl,
+        provUsername: settings.provUsername,
+        provPassword: settings.provPassword,
         storeType: settings.storeType,
         testMode: settings.testMode
       }
@@ -160,7 +171,8 @@ class ZiraatPaymentService {
             rnd: rnd,
             okurl: data.successUrl,
             failUrl: data.failUrl,
-            callbackUrl: data.successUrl, // Callback URL
+            // Banka sunucu bildirimi: tarayıcı redirect URL'inden ayrı olmalı
+            callbackUrl: data.callbackUrl || data.successUrl,
             lang: "tr",
             encoding: "utf-8",
             Instalment: data.installments || ""
@@ -268,6 +280,90 @@ class ZiraatPaymentService {
     } catch (error) {
         console.error('Callback doğrulama hatası:', error)
         return { success: false, error: 'Doğrulama sırasında hata oluştu' }
+    }
+  }
+
+  /**
+   * NestPay XML OrderStatusQuery — bankada sipariş durumunu sorgular.
+   * oid olarak createPaymentRequest'te gönderilen order.id kullanılır.
+   */
+  async inquireOrderStatus(orderId: string): Promise<{
+    success: boolean
+    paid: boolean
+    error?: string
+    authCode?: string
+    transId?: string
+    procReturnCode?: string
+    orderStatus?: string
+    amount?: string
+    rawXml?: string
+  }> {
+    if (!this.settings) {
+      const init = await this.initialize()
+      if (!init) return { success: false, paid: false, error: 'Ödeme sistemi yapılandırılamadı' }
+    }
+
+    const apiHost = this.settings!.apiUrl || this.settings!.posUrl.replace('/est3Dgate', '/api')
+    const apiUrl = apiHost.startsWith('http') ? apiHost : `https://${apiHost}`
+    const name = this.settings!.provUsername
+    const password = this.settings!.provPassword
+
+    if (!name || !password) {
+      return { success: false, paid: false, error: 'Provizyon kullanıcı bilgileri eksik' }
+    }
+
+    const xml = `<?xml version="1.0" encoding="ISO-8859-9"?>
+<CC5Request>
+  <Name>${name}</Name>
+  <Password>${password}</Password>
+  <ClientId>${this.settings!.merchantId}</ClientId>
+  <OrderId>${orderId}</OrderId>
+  <Type>OrderStatusQuery</Type>
+</CC5Request>`
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `DATA=${encodeURIComponent(xml)}`,
+        cache: 'no-store'
+      })
+
+      const rawXml = await response.text()
+      const getTag = (tag: string) => {
+        const m = rawXml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'i'))
+        return m?.[1]?.trim() || ''
+      }
+
+      const procReturnCode = getTag('ProcReturnCode')
+      const responseText = getTag('Response')
+      const orderStatus = getTag('OrderStatus') || getTag('CHARGEType') || getTag('TransStat')
+      const authCode = getTag('AuthCode')
+      const transId = getTag('TransId') || getTag('HostRefNum')
+      const amount = getTag('Amt') || getTag('amount') || getTag('Extra.TOTAL')
+
+      const paid =
+        procReturnCode === '00' ||
+        responseText.toLowerCase() === 'approved' ||
+        /^(approved|a|completed|captured|paid)$/i.test(orderStatus)
+
+      return {
+        success: true,
+        paid,
+        authCode: authCode || undefined,
+        transId: transId || undefined,
+        procReturnCode: procReturnCode || undefined,
+        orderStatus: orderStatus || responseText || undefined,
+        amount: amount || undefined,
+        rawXml
+      }
+    } catch (error) {
+      console.error('OrderStatusQuery error:', error)
+      return {
+        success: false,
+        paid: false,
+        error: error instanceof Error ? error.message : 'Banka sorgu hatası'
+      }
     }
   }
 }

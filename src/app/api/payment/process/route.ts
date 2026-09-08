@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
                 orderNumber: order.orderNumber,
                 successUrl: `${baseUrl}/api/payment/ziraat/callback`,
                 failUrl: `${baseUrl}/api/payment/ziraat/callback`,
+                callbackUrl: `${baseUrl}/api/payment/ziraat/notify`,
                 customerEmail: order.user.email,
                 customerName: order.user.name,
                 customerPhone: order.user.phone ?? '',
@@ -107,6 +108,14 @@ export async function POST(request: NextRequest) {
                     error: ziraatResponse.error || 'Ödeme başlatılamadı' 
                 }, { status: 400 })
             }
+
+            await prisma.order.update({
+                where: { id: order.id },
+                data: {
+                    paymentStatus: 'PENDING',
+                    notes: 'Ziraat Bankası ödeme sayfasına yönlendirildi'
+                }
+            }).catch(() => null)
 
             // Frontend'e banka formunu post etmesi için gerekli verileri dön
             return NextResponse.json({

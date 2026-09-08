@@ -220,12 +220,17 @@ export async function PUT(
         const body = await request.json()
         console.log('Update request body:', body)
 
-        const { status, notes } = body
+        const { status, notes, paymentStatus, markPaid, transId, authCode } = body
 
         // Mevcut siparişi al (e-posta göndermek için)
         const currentOrder = await prisma.order.findUnique({
             where: { id: resolvedParams.id },
-            include: {
+            select: {
+                id: true,
+                status: true,
+                paymentStatus: true,
+                notes: true,
+                finalAmount: true,
                 user: {
                     select: { name: true, email: true }
                 }
@@ -239,28 +244,53 @@ export async function PUT(
             )
         }
 
+        const shouldMarkPaid = markPaid === true || paymentStatus === 'COMPLETED'
+        const updateData: Record<string, any> = {}
+        if (typeof status === 'string' && status) updateData.status = status
+        if (typeof notes === 'string') updateData.notes = notes
+
+        if (shouldMarkPaid && currentOrder.paymentStatus !== 'COMPLETED') {
+            updateData.paymentStatus = 'COMPLETED'
+            if (!updateData.status || updateData.status === 'PENDING') {
+                updateData.status = 'CONFIRMED'
+            }
+            const reconNote = [
+                'Manuel mutabakat (admin).',
+                authCode ? `AuthCode: ${authCode}` : null,
+                transId ? `TransId: ${transId}` : null,
+                'Ziraat panelinde doğrulandı.'
+            ].filter(Boolean).join(' ')
+            updateData.notes = notes
+                ? `${notes} | ${reconNote}`
+                : (currentOrder.notes ? `${currentOrder.notes} | ${reconNote}` : reconNote)
+        }
+
         // Siparişi güncelle
         const updatedOrder = await prisma.order.update({
             where: { id: resolvedParams.id },
-            data: {
-                status: status,
-                notes: notes
-            },
-            include: {
+            data: updateData,
+            select: {
+                id: true,
+                orderNumber: true,
+                status: true,
+                paymentStatus: true,
+                totalAmount: true,
+                shippingFee: true,
+                taxAmount: true,
+                discountAmount: true,
+                finalAmount: true,
+                notes: true,
+                studentName: true,
+                createdAt: true,
+                updatedAt: true,
                 user: {
-                    select: {
-                        id: true,
-                        name: true,
-                        email: true
-                    }
+                    select: { id: true, name: true, email: true }
                 },
                 items: {
                     include: {
                         product: {
                             include: {
-                                category: {
-                                    select: { id: true, name: true }
-                                }
+                                category: { select: { id: true, name: true } }
                             }
                         },
                         variation: {
@@ -268,9 +298,7 @@ export async function PUT(
                                 attributes: {
                                     include: {
                                         attributeValue: {
-                                            include: {
-                                                attribute: true
-                                            }
+                                            include: { attribute: true }
                                         }
                                     }
                                 }
@@ -295,19 +323,111 @@ export async function PUT(
             }
         })
 
-        console.log('Order updated:', updatedOrder.id)
-
-        // E-posta bildirimi gönder (durum değiştiyse)
-        if (currentOrder.status !== status) {
-            try {
-                await emailService.sendOrderStatusUpdate(updatedOrder, currentOrder.user.email, status)
-            } catch (emailError) {
-                console.error('E-posta gönderilirken hata:', emailError)
-                // E-posta hatası sipariş güncellemeyi etkilemesin
+        if (shouldMarkPaid && currentOrder.paymentStatus !== 'COMPLETED') {
+            const txn = String(transId || `MANUAL-${updatedOrder.id.slice(-8)}-${Date.now()}`)
+            const hasCompletedPayment = updatedOrder.payments.some((p) => p.status === 'COMPLETED')
+            if (!hasCompletedPayment) {
+                try {
+                    await prisma.payment.create({
+                        data: {
+                            orderId: updatedOrder.id,
+                            amount: Number(updatedOrder.finalAmount),
+                            method: 'CREDIT_CARD',
+                            status: 'COMPLETED',
+                            transactionId: txn,
+                            gatewayResponse: JSON.stringify({
+                                source: 'admin_mark_paid',
+                                authCode: authCode || null,
+                                transId: transId || null
+                            })
+                        }
+                    })
+                } catch (e) {
+                    console.warn('Payment create on markPaid failed:', e)
+                }
             }
         }
 
-        return NextResponse.json(updatedOrder)
+        console.log('Order updated:', updatedOrder.id)
+
+        const finalStatus = updatedOrder.status
+        if (currentOrder.status !== finalStatus) {
+            try {
+                await emailService.sendOrderStatusUpdate(
+                    updatedOrder as any,
+                    currentOrder.user.email,
+                    finalStatus
+                )
+            } catch (emailError) {
+                console.error('E-posta gönderilirken hata:', emailError)
+            }
+        }
+
+        // Payment eklendiyse güncel listeyi dön
+        const refreshed = await prisma.order.findUnique({
+            where: { id: updatedOrder.id },
+            select: {
+                id: true,
+                orderNumber: true,
+                status: true,
+                paymentStatus: true,
+                totalAmount: true,
+                shippingFee: true,
+                taxAmount: true,
+                discountAmount: true,
+                finalAmount: true,
+                notes: true,
+                studentName: true,
+                createdAt: true,
+                updatedAt: true,
+                user: { select: { id: true, name: true, email: true } },
+                items: {
+                    include: {
+                        product: {
+                            include: { category: { select: { id: true, name: true } } }
+                        },
+                        variation: {
+                            include: {
+                                attributes: {
+                                    include: {
+                                        attributeValue: { include: { attribute: true } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                shippingAddress: true,
+                billingAddress: true,
+                payments: {
+                    orderBy: { createdAt: 'desc' },
+                    select: {
+                        id: true,
+                        amount: true,
+                        method: true,
+                        status: true,
+                        transactionId: true,
+                        gatewayResponse: true,
+                        createdAt: true
+                    }
+                }
+            }
+        })
+
+        return NextResponse.json({
+            ...refreshed,
+            totalAmount: Number(refreshed!.totalAmount),
+            shippingFee: Number(refreshed!.shippingFee),
+            taxAmount: Number(refreshed!.taxAmount),
+            discountAmount: Number(refreshed!.discountAmount),
+            finalAmount: Number(refreshed!.finalAmount),
+            payments: refreshed!.payments.map((p) => ({ ...p, amount: Number(p.amount) })),
+            items: refreshed!.items.map((item) => ({
+                ...item,
+                unitPrice: Number((item as any).unitPrice),
+                totalPrice: Number((item as any).totalPrice)
+            }))
+        })
     } catch (error) {
         console.error('Error updating admin order:', error)
         return NextResponse.json(

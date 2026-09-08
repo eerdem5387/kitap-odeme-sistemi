@@ -180,11 +180,11 @@ export default function PaymentPage() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <button
-              onClick={() => router.push('/checkout')}
+              onClick={() => router.push('/products')}
               className="flex items-center text-gray-600 hover:text-gray-900 transition-colors font-medium"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Teslimat Bilgilerine Geri Dön
+              Alışverişe Dön
             </button>
           </div>
           <div className="flex items-center space-x-3 sm:space-x-4 mb-4 sm:mb-6">

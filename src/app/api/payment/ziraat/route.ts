@@ -71,7 +71,8 @@ export async function POST(request: NextRequest) {
             customerName: validatedData.customerName,
             customerPhone: validatedData.customerPhone,
             successUrl: `${baseUrl}/api/payment/ziraat/callback`,
-            failUrl: `${baseUrl}/api/payment/ziraat/callback`
+            failUrl: `${baseUrl}/api/payment/ziraat/callback`,
+            callbackUrl: `${baseUrl}/api/payment/ziraat/notify`
         }
 
         const paymentResponse = await ziraatPaymentService.createPaymentRequest(paymentRequest)
