@@ -77,7 +77,7 @@ export default function PaymentSuccessPage() {
 
     let cancelled = false
     let attempts = 0
-    const maxAttempts = 8
+    const maxAttempts = 36
 
     const fetchOrder = async (): Promise<Order | null> => {
       const token = localStorage.getItem('token')
@@ -99,24 +99,32 @@ export default function PaymentSuccessPage() {
         let data = await fetchOrder()
         if (cancelled || !data) return
         setOrder(data)
+        setLoading(false)
 
-        if (data.paymentStatus !== 'COMPLETED') {
-          setVerifying(true)
-          while (!cancelled && attempts < maxAttempts && data?.paymentStatus !== 'COMPLETED') {
-            attempts += 1
-            await new Promise((r) => setTimeout(r, 1500))
-            data = await fetchOrder()
-            if (cancelled || !data) return
-            setOrder(data)
-          }
-          setVerifying(false)
+        if (data.paymentStatus === 'COMPLETED') {
+          clearCartIfPaid(data)
+          return
         }
 
-        if (data) clearCartIfPaid(data)
+        setVerifying(true)
+        while (!cancelled && attempts < maxAttempts && data?.paymentStatus !== 'COMPLETED') {
+          attempts += 1
+          await new Promise((r) => setTimeout(r, 10000))
+          data = await fetchOrder()
+          if (cancelled || !data) return
+          setOrder(data)
+          if (data.paymentStatus === 'COMPLETED') {
+            clearCartIfPaid(data)
+            break
+          }
+        }
       } catch (e: any) {
         if (!cancelled) setError(e?.message || 'Sipariş getirilemedi')
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setVerifying(false)
+          setLoading(false)
+        }
       }
     }
 
@@ -171,7 +179,8 @@ export default function PaymentSuccessPage() {
               <Clock className="h-14 w-14 text-amber-500 mx-auto mb-3" />
               <h1 className="text-2xl font-bold text-gray-900">Ödeme Doğrulanıyor</h1>
               <p className="text-gray-600 mt-2">
-                Banka ödemesi henüz sisteme düşmedi. Kartınızdan çekim olduysa lütfen okul ile iletişime geçin.
+                Banka tahsilatı alınmış olabilir. Sonuç siteye birkaç dakika içinde otomatik düşer; bu ekran kendi kendine güncellenir.
+                Sayfayı kapatabilirsiniz, ödeme ayrıca kayda geçecektir.
                 Sipariş No: <strong>#{order.orderNumber}</strong>
               </p>
               <button

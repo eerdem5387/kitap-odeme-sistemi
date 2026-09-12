@@ -166,7 +166,7 @@ export default function AdminOrdersPage() {
     const paymentConfig = {
       PENDING: { color: 'bg-amber-50 text-amber-700 border-amber-100', icon: Clock, label: 'Ödeme Bekleniyor' },
       COMPLETED: { color: 'bg-green-50 text-green-700 border-green-100', icon: CheckCircle2, label: 'Ödendi' },
-      FAILED: { color: 'bg-red-50 text-red-700 border-red-100', icon: AlertCircle, label: 'Başarısız' }
+      FAILED: { color: 'bg-red-50 text-red-700 border-red-100', icon: AlertCircle, label: 'Banka Reddetti' }
     }
 
     const config = type === 'payment' ? paymentConfig : orderConfig
@@ -280,7 +280,7 @@ export default function AdminOrdersPage() {
                 <th className="px-6 py-4 font-semibold text-gray-600">Tutar</th>
                 <th className="px-6 py-4 font-semibold text-gray-600">Durum</th>
                 <th className="px-6 py-4 font-semibold text-gray-600">Ödeme</th>
-                <th className="px-6 py-4 font-semibold text-gray-600">Başarısız Sebebi</th>
+                <th className="px-6 py-4 font-semibold text-gray-600">Banka Notu</th>
                 <th className="px-6 py-4 font-semibold text-gray-600">Tarih</th>
                 <th className="px-6 py-4 font-semibold text-gray-600 text-right">İşlem</th>
               </tr>

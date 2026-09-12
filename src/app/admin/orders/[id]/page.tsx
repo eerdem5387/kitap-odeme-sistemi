@@ -213,7 +213,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return 'bg-red-100 text-red-800'
+        return 'bg-amber-100 text-amber-800'
       case 'CONFIRMED':
         return 'bg-blue-100 text-blue-800'
       case 'SHIPPED':
@@ -230,7 +230,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   const getStatusText = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return 'Başarısız'
+        return 'Beklemede'
       case 'CONFIRMED':
         return 'Onaylandı'
       case 'SHIPPED':
@@ -263,7 +263,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   const getStatusExplanation = (orderStatus: string, paymentStatus: string, payments: Payment[]) => {
     // Ödeme durumu açıklamaları
     if (paymentStatus === 'PENDING') {
-      return 'Ödeme tamamlanmadı / başarısız'
+      return 'Ödeme sonucu henüz kesinleşmedi. Banka başarılıysa kayıt birkaç dakika içinde otomatik güncellenir; bu sipariş başarısız değildir.'
     }
     
     if (paymentStatus === 'FAILED') {
@@ -454,7 +454,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
                     )}
                     {order.failureReason && order.paymentStatus !== 'COMPLETED' && (
                       <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg">
-                        <p className="text-xs font-semibold text-red-700 mb-1">Başarısız Sebebi</p>
+                        <p className="text-xs font-semibold text-red-700 mb-1">Banka Notu</p>
                         <p className="text-sm text-red-800">{order.failureReason}</p>
                       </div>
                     )}
@@ -627,14 +627,16 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
                 <h3 className="font-medium text-gray-900 mb-2">Ödeme Durumu</h3>
                 <div className="space-y-2">
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    order.paymentStatus === 'COMPLETED' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
+                    order.paymentStatus === 'COMPLETED'
+                      ? 'bg-green-100 text-green-800'
+                      : order.paymentStatus === 'FAILED'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-amber-100 text-amber-800'
                   }`}>
                     {order.paymentStatus === 'COMPLETED'
                       ? 'Ödendi'
                       : order.paymentStatus === 'FAILED'
-                        ? 'Başarısız'
+                        ? 'Banka Reddetti'
                         : 'Ödeme Bekleniyor'}
                   </span>
                   {order.failureReason && order.paymentStatus !== 'COMPLETED' && (

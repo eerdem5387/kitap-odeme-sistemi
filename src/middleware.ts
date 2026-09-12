@@ -36,6 +36,11 @@ export function middleware(request: NextRequest) {
         ].join('; ')
     )
 
+    // Banka sunucu bildirimi rate-limit'e takılırsa ödeme panelde kaybolur.
+    if (pathname.startsWith('/api/payment/ziraat/')) {
+        return response
+    }
+
     // Rate limiting for API routes
     if (pathname.startsWith('/api/')) {
         const ip = request.headers.get('x-forwarded-for') ||

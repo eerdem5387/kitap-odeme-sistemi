@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { parseCallbackBody, processZiraatCallback } from '@/lib/ziraat-callback-handler'
+import {
+    nestpayAckResponse,
+    nestpayRetryResponse,
+    processZiraatCallback,
+    readCallbackData
+} from '@/lib/ziraat-callback-handler'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -24,19 +29,14 @@ function isLikelyBrowser(request: NextRequest): boolean {
     return false
 }
 
-async function respond(request: NextRequest, data: Record<string, string>) {
+async function respond(request: NextRequest) {
     const baseUrl = getBaseUrl(request)
+    const data = await readCallbackData(request)
     const result = await processZiraatCallback(data, baseUrl)
 
-    // Banka sunucu bildirimi yanlışlıkla bu URL'e gelirse redirect yerine APPROVED dön
+    // Banka sunucu bildirimi yanlışlıkla bu URL'e gelirse redirect değil, tam "Approved" dön.
     if (!isLikelyBrowser(request)) {
-        return new NextResponse(result.success ? 'APPROVED' : 'FAILED', {
-            status: 200,
-            headers: {
-                'Content-Type': 'text/plain; charset=utf-8',
-                'Cache-Control': 'no-store'
-            }
-        })
+        return result.acknowledge ? nestpayAckResponse() : nestpayRetryResponse()
     }
 
     const response = NextResponse.redirect(result.redirectUrl, 303)
@@ -48,10 +48,12 @@ async function respond(request: NextRequest, data: Record<string, string>) {
 
 export async function POST(request: NextRequest) {
     try {
-        const formData = await request.formData()
-        return await respond(request, parseCallbackBody(formData))
+        return await respond(request)
     } catch (error) {
         console.error('Ziraat POST Callback Error:', error)
+        if (!isLikelyBrowser(request)) {
+            return nestpayRetryResponse()
+        }
         const baseUrl = getBaseUrl(request)
         const response = NextResponse.redirect(`${baseUrl}/payment/fail?error=SistemHatasi`, 303)
         response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -61,10 +63,12 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
     try {
-        const { searchParams } = new URL(request.url)
-        return await respond(request, parseCallbackBody(searchParams))
+        return await respond(request)
     } catch (error) {
         console.error('Ziraat GET Callback Error:', error)
+        if (!isLikelyBrowser(request)) {
+            return nestpayRetryResponse()
+        }
         const baseUrl = getBaseUrl(request)
         const response = NextResponse.redirect(`${baseUrl}/payment/fail?error=SistemHatasi`, 303)
         response.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate')

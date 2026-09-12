@@ -117,7 +117,7 @@ export default function AdminCustomerDetailPage({ params }: { params: Promise<{ 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return 'bg-red-100 text-red-800'
+        return 'bg-amber-100 text-amber-800'
       case 'CONFIRMED':
         return 'bg-blue-100 text-blue-800'
       case 'SHIPPED':
@@ -134,7 +134,7 @@ export default function AdminCustomerDetailPage({ params }: { params: Promise<{ 
   const getStatusText = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return 'Başarısız'
+        return 'Beklemede'
       case 'CONFIRMED':
         return 'Onaylandı'
       case 'SHIPPED':
@@ -170,7 +170,7 @@ export default function AdminCustomerDetailPage({ params }: { params: Promise<{ 
       case 'COMPLETED':
         return 'bg-green-100 text-green-800'
       case 'PENDING':
-        return 'bg-red-100 text-red-800'
+        return 'bg-amber-100 text-amber-800'
       case 'FAILED':
         return 'bg-red-100 text-red-800'
       default:
@@ -183,9 +183,9 @@ export default function AdminCustomerDetailPage({ params }: { params: Promise<{ 
       case 'COMPLETED':
         return 'Ödendi'
       case 'PENDING':
-        return 'Başarısız'
+        return 'Ödeme Bekleniyor'
       case 'FAILED':
-        return 'Başarısız'
+        return 'Banka Reddetti'
       default:
         return status
     }

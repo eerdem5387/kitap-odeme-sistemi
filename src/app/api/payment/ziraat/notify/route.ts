@@ -1,5 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { parseCallbackBody, processZiraatCallback } from '@/lib/ziraat-callback-handler'
+import { NextRequest } from 'next/server'
+import {
+    nestpayAckResponse,
+    nestpayRetryResponse,
+    processZiraatCallback,
+    readCallbackData
+} from '@/lib/ziraat-callback-handler'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -15,45 +20,32 @@ function getBaseUrl(request: NextRequest): string {
 }
 
 /**
- * NestPay server-to-server bildirimi.
- * Banka buraya POST atar; 303 redirect değil, düz metin APPROVED/FAILED bekler.
- * Tarayıcı dönüşü /api/payment/ziraat/callback üzerinden yapılır.
+ * NestPay sunucudan sunucuya bildirim.
+ * Tahsilat bankada bitmiş olsa bile tarayıcı kapanırsa sonuç buraya gelir.
+ * Banka, cevap gövdesi tam olarak "Approved" olana kadar yaklaşık 5 dakikada bir yeniden gönderir.
+ * "APPROVED" veya "FAILED" kabul edilmez; kalıcı yazım yapılmadan Approved dönülmez.
  */
-async function handleNotify(data: Record<string, string>, baseUrl: string) {
+async function handleNotify(request: NextRequest) {
+    const baseUrl = getBaseUrl(request)
+    const data = await readCallbackData(request)
     const result = await processZiraatCallback(data, baseUrl)
-    return new NextResponse(result.success ? 'APPROVED' : 'FAILED', {
-        status: 200,
-        headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Cache-Control': 'no-store'
-        }
-    })
+    return result.acknowledge ? nestpayAckResponse() : nestpayRetryResponse()
 }
 
 export async function POST(request: NextRequest) {
     try {
-        const baseUrl = getBaseUrl(request)
-        const formData = await request.formData()
-        return await handleNotify(parseCallbackBody(formData), baseUrl)
+        return await handleNotify(request)
     } catch (error) {
         console.error('Ziraat notify POST error:', error)
-        return new NextResponse('FAILED', {
-            status: 200,
-            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-        })
+        return nestpayRetryResponse()
     }
 }
 
 export async function GET(request: NextRequest) {
     try {
-        const baseUrl = getBaseUrl(request)
-        const { searchParams } = new URL(request.url)
-        return await handleNotify(parseCallbackBody(searchParams), baseUrl)
+        return await handleNotify(request)
     } catch (error) {
         console.error('Ziraat notify GET error:', error)
-        return new NextResponse('FAILED', {
-            status: 200,
-            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-        })
+        return nestpayRetryResponse()
     }
 }

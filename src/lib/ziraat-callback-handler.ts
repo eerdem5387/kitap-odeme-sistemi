@@ -74,25 +74,108 @@ async function ensurePaymentRecord(params: {
     }
 }
 
+export type ZiraatCallbackResult = {
+    success: boolean
+    /** NestPay, gövde tam olarak "Approved" olana kadar 5 dakikada bir yeniden dener. Yalnızca kalıcı yazımdan sonra true. */
+    acknowledge: boolean
+    declined: boolean
+    redirectUrl: string
+    orderId?: string
+}
+
+export function nestpayAckResponse() {
+    return new Response('Approved', {
+        status: 200,
+        headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store'
+        }
+    })
+}
+
+export function nestpayRetryResponse() {
+    return new Response('Retry', {
+        status: 200,
+        headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store'
+        }
+    })
+}
+
+export async function readCallbackData(request: Request): Promise<Record<string, string>> {
+    const contentType = (request.headers.get('content-type') || '').toLowerCase()
+
+    try {
+        const form = await request.clone().formData()
+        const parsed = parseCallbackBody(form)
+        if (Object.keys(parsed).length > 0) return parsed
+    } catch {
+        // multipart değilse veya gövde form değilse aşağıda metin olarak okunur
+    }
+
+    let raw = ''
+    try {
+        raw = await request.text()
+    } catch {
+        raw = ''
+    }
+
+    const trimmed = raw.trim()
+    let data: Record<string, string> = {}
+    if (!trimmed) {
+        data = {}
+    } else if (trimmed.startsWith('{') || contentType.includes('json')) {
+        try {
+            const json = JSON.parse(trimmed)
+            if (json && typeof json === 'object' && !Array.isArray(json)) {
+                for (const [key, value] of Object.entries(json)) {
+                    if (value !== undefined && value !== null) data[key] = String(value)
+                }
+            }
+        } catch {
+            data = parseCallbackBody(new URLSearchParams(trimmed))
+        }
+    } else {
+        data = parseCallbackBody(new URLSearchParams(trimmed))
+    }
+
+    try {
+        const url = new URL(request.url)
+        url.searchParams.forEach((value, key) => {
+            if (!data[key]) data[key] = value
+        })
+    } catch {
+        // url okunamazsa yalnızca gövde kullanılır
+    }
+
+    return data
+}
+
 export async function processZiraatCallback(
     data: Record<string, any>,
     baseUrl: string
-): Promise<{ success: boolean; redirectUrl: string; orderId?: string }> {
+): Promise<ZiraatCallbackResult> {
     const result = await ziraatPaymentService.verifyCallback(data)
-    const orderId = pick(data, ['oid', 'OID', 'OrderId', 'orderId'])
+    const orderRef = pick(data, ['oid', 'OID', 'ReturnOid', 'returnOid', 'OrderId', 'orderId'])
     const authCode = pick(data, ['AuthCode', 'authCode', 'AUTHCODE'])
     const transId = pick(data, ['TransId', 'transId', 'TRANSID', 'HostRefNum', 'hostRefNum'])
-    const amount = Number(pick(data, ['amount', 'Amount', 'AMOUNT']) || 0)
+    const amountRaw = pick(data, ['amount', 'Amount', 'AMOUNT']).replace(',', '.')
+    const amount = Number(amountRaw || 0)
 
-    if (!orderId) {
+    if (!orderRef) {
         return {
             success: false,
+            acknowledge: false,
+            declined: false,
             redirectUrl: `${baseUrl}/payment/fail?error=SiparisNoBulunamadi`
         }
     }
 
-    const existingOrder = await prisma.order.findUnique({
-        where: { id: orderId },
+    const existingOrder = await prisma.order.findFirst({
+        where: {
+            OR: [{ id: orderRef }, { orderNumber: orderRef }]
+        },
         select: {
             id: true,
             paymentStatus: true,
@@ -105,10 +188,14 @@ export async function processZiraatCallback(
     if (!existingOrder) {
         return {
             success: false,
-            orderId,
+            acknowledge: false,
+            declined: false,
+            orderId: orderRef,
             redirectUrl: `${baseUrl}/payment/fail?error=SiparisBulunamadi`
         }
     }
+
+    const orderId = existingOrder.id
 
     if (existingOrder.paymentStatus === 'COMPLETED') {
         await ensurePaymentRecord({
@@ -125,6 +212,8 @@ export async function processZiraatCallback(
 
         return {
             success: true,
+            acknowledge: true,
+            declined: false,
             orderId,
             redirectUrl: `${baseUrl}/payment/success?orderId=${orderId}`
         }
@@ -175,8 +264,28 @@ export async function processZiraatCallback(
 
         return {
             success: true,
+            acknowledge: true,
+            declined: false,
             orderId,
             redirectUrl: `${baseUrl}/payment/success?orderId=${orderId}`
+        }
+    }
+
+    // Eksik bildirim başarı değildir, başarısızlık da değildir. Siparişi FAILED yapma;
+    // NestPay aynı sonucu yaklaşık 5 dakikada bir yeniden gönderir.
+    if (!result.bankDeclined) {
+        console.warn('Ziraat callback kesinleşmedi, sipariş bekletiliyor', {
+            orderId,
+            response: pick(data, ['Response', 'response']),
+            procReturnCode: pick(data, ['ProcReturnCode', 'procReturnCode']),
+            mdStatus: pick(data, ['mdStatus', 'MdStatus'])
+        })
+        return {
+            success: false,
+            acknowledge: false,
+            declined: false,
+            orderId,
+            redirectUrl: `${baseUrl}/payment/success?orderId=${orderId}&pending=1`
         }
     }
 
@@ -223,6 +332,8 @@ export async function processZiraatCallback(
 
     return {
         success: false,
+        acknowledge: true,
+        declined: true,
         orderId,
         redirectUrl: `${baseUrl}/payment/fail?orderId=${orderId}&error=${encodeURIComponent(failureReason)}`
     }

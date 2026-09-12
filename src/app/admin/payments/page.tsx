@@ -157,7 +157,7 @@ export default function AdminPaymentsPage() {
       case 'PENDING':
         return 'Ödeme Bekleniyor'
       case 'FAILED':
-        return 'Başarısız'
+        return 'Banka Reddetti'
       case 'COMPLETED':
         return 'Tamamlandı'
       default:

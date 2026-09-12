@@ -127,8 +127,9 @@ export function resolveOrderFailureReason(input: {
     return 'Ödeme işlemi başarısız oldu'
   }
 
+  // PENDING, başarısız değildir. Banka bildirimi gelene kadar kırmızı sebep gösterme.
   if (input.paymentStatus === 'PENDING') {
-    return 'Banka sonucu siteye ulaşmadı (callback alınamadı). Ziraat panelinden kontrol edin.'
+    return null
   }
 
   return null

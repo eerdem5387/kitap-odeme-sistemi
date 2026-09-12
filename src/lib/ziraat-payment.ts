@@ -18,7 +18,7 @@ interface PaymentRequest {
   orderNumber?: string
   successUrl: string
   failUrl: string
-  /** NestPay server-to-server bildirim URL'i (redirect değil, APPROVED bekler) */
+  /** NestPay server-to-server bildirim URL'i. Banka, cevap gövdesi tam olarak "Approved" olana kadar yeniden dener. */
   callbackUrl?: string
   installments?: string // Taksit sayısı (boş ise tek çekim)
   customerEmail?: string
@@ -175,6 +175,8 @@ class ZiraatPaymentService {
             callbackUrl: data.callbackUrl || data.successUrl,
             lang: "tr",
             encoding: "utf-8",
+            // Banka sonuç sayfasının tarayıcıyı hemen okUrl'e post etmesi için kısa süre
+            refreshtime: "1",
             Instalment: data.installments || ""
         }
 
@@ -216,6 +218,7 @@ class ZiraatPaymentService {
     error?: string
     hashValid?: boolean
     bankApproved?: boolean
+    bankDeclined?: boolean
   }> {
     if (!this.settings) {
         await this.initialize()
@@ -242,16 +245,21 @@ class ZiraatPaymentService {
             console.warn('Callback hash bilgisi bulunamadı')
         }
 
-        const mdStatus = String(data['mdStatus'] || data['MdStatus'] || '').trim()
         const response = String(data['Response'] || data['response'] || '').trim().toLowerCase()
         const procReturnCode = String(
             data['ProcReturnCode'] || data['procReturnCode'] || data['PROCRETURNCODE'] || ''
         ).trim()
 
-        const mdOk = ['1', '2', '3', '4'].includes(mdStatus)
         const responseOk = response === 'approved'
+        const responseDeclined = response === 'declined' || response === 'error'
         const procOk = !procReturnCode || procReturnCode === '00'
-        const bankApproved = mdOk && responseOk && procOk
+        const procFailed = procReturnCode !== '' && procReturnCode !== '00'
+        // 3d_pay_hosting'de tahsilat Response=Approved + ProcReturnCode=00 ile kesinleşir.
+        // Sunucu bildiriminde mdStatus gelmeyebilir; eksik mdStatus başarıyı iptal etmemeli.
+        const bankApproved = responseOk && procOk
+        const bankDeclined =
+            !bankApproved &&
+            (responseDeclined || procFailed)
 
         if (bankApproved) {
             if (!hashValid) {
@@ -260,21 +268,33 @@ class ZiraatPaymentService {
                     success: true,
                     hashValid: false,
                     bankApproved: true,
+                    bankDeclined: false,
                     error: 'Hash doğrulanamadı fakat banka onayı mevcut'
                 }
             }
-            return { success: true, hashValid: true, bankApproved: true }
+            return { success: true, hashValid: true, bankApproved: true, bankDeclined: false }
+        }
+
+        if (!bankDeclined) {
+            return {
+                success: false,
+                hashValid,
+                bankApproved: false,
+                bankDeclined: false,
+                error: 'Banka sonucu eksik veya henüz kesinleşmedi'
+            }
         }
 
         return {
             success: false,
             hashValid,
             bankApproved: false,
+            bankDeclined: true,
             error:
                 data['ErrMsg'] ||
                 data['errmsg'] ||
                 data['ErrorMessage'] ||
-                (!hashValid && incomingHash ? 'Güvenlik doğrulaması başarısız (Hash mismatch)' : null) ||
+                data['mdErrorMsg'] ||
                 'İşlem banka tarafından reddedildi'
         }
     } catch (error) {
